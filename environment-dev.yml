@@ -1,0 +1,25 @@
+name: quiescent-dev
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - cython
+  - hdf5
+  - h5py
+  - emcee
+  - dynesty
+  - gsl
+  - openblas
+  - openmpi
+  - mpi4py
+  - git
+  - gfortran
+  - pip
+  - pip:
+    - jupyterlab
+    - matplotlib
+    - astropy
+    - fsps
+    - astro-sedpy

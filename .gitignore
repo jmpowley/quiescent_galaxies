@@ -1,0 +1,25 @@
+# directories to ignore
+data_raw/
+data_external/
+data_processed/
+outputs/
+figures/
+dev/
+docs/
+
+# env
+# environment.yml
+# environment-dev.yml
+
+# python / notebooks
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.h5
+*.fits
+
+# macOS
+.DS_Store
+
+# other
+pico.save
