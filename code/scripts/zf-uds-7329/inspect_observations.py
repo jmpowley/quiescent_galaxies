@@ -53,7 +53,6 @@ def load_prism_data(prism_dir, name, version, extra_nod, flux_units, return_quan
 
     return wave_um, flux, err, mask
 
-# Load grating observations
 def load_grating_data(grating_dir, name, grating, filter, flux_units, return_quantities=False, return_units=False):
 
     # Load FITS HDUs
