@@ -52,46 +52,6 @@ def load_prism_data(prism_dir, name, version, extra_nod, flux_units, return_quan
     wave_um = convert_wave_m_to_um(wave_m)
 
     return wave_um, flux, err, mask
-    
-    # Assign units
-    wave = wave * u.m
-    flux = flux * u.Unit('W / m3')
-    err = err * u.Unit('W / m3')
-
-    # Check for correct units
-    all_units = ['original', 'maggie', 'jy', 'cgs']
-    if units not in all_units:
-        raise Exception(f"Incorrect units argument. You must select from {[unit for unit in all_units]}")
-
-    # Convert units
-    if units == 'original':
-        pass
-    elif units == 'cgs':
-        wave = wave.to(u.um)
-        flux = flux.to(u.erg/(u.s * u.cm**2 * u.AA))
-        err = err.to(u.erg/(u.s * u.cm**2 * u.AA))
-    elif units == 'jy':
-        wave = wave.to(u.um)
-        # flux_cgs = flux.to(u.erg/(u.s * u.cm**2 * u.AA))
-        # err_cgs = err.to(u.erg/(u.s * u.cm**2 * u.AA))
-        # flux = flux_cgs.to(u.Jy)
-        # err = err_cgs.to(u.Jy)
-        flux = flux.to(u.Jy, equivalencies=u.spectral_density(wave))
-        err = err.to(u.Jy, equivalencies=u.spectral_density(wave))
-    elif units == 'maggies':
-        wave = wave.to(u.AA)
-        flux_jy = flux.to(u.Jy, equivalencies=u.spectral_density(wave))
-        err_jy = err.to(u.Jy, equivalencies=u.spectral_density(wave))
-        flux = convert_jansky_to_maggie(flux_jy)
-        err = convert_jansky_to_maggie(err_jy)
-
-    if not return_none:
-        if return_quantity:
-            return wave, flux, err
-        else:
-            return wave.value, flux.value, err.value
-    else:
-        return None, None, None
 
 # Load grating observations
 def load_grating_data(grating_dir, name, grating, filter, flux_units, return_quantities=False, return_units=False):
