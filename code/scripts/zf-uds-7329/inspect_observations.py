@@ -5,21 +5,58 @@ import matplotlib.pyplot as plt
 
 import astropy.units as u
 from astropy.io import fits
+from astropy.table import Table
 
-# Add in conversion function
-# sys.append(".")
-
-from conversions import convert_wave_um_to_m, convert_wave_m_to_um, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_si_to_jy
+from conversions import convert_wave_um_to_m, convert_wave_m_to_um, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_si_to_jy, convert_magnitude_to_maggie
 
 # ----------------------
 # Functions to load data
 # ----------------------
+def load_photometry_data(phot_dir, name, flux_units, return_quantities=False, return_units=False):
+
+    # Load table
+    phot_name = f'{name}_nircam_photometry.fits'
+    phot_path = os.path.join(phot_dir, phot_name)
+    phot_tb = Table.read(phot_path)
+
+    # Access photometry data
+    filters = phot_tb['FILTER'].tolist()
+    jwst_filters = ([f'jwst_{filt}' for filt in filters])  # change to sedpy names
+    flux_mag = phot_tb['DATA'].data
+    err_mag = phot_tb['ERR'].data
+
+    # Convert units
+    if flux_units == 'maggie':
+        convert_magnitude_to_maggie(flux_mag, err_mag)
+
+    # # Convert units
+    # if units == 'original':
+    #     pass
+    # elif units == 'maggie':
+    #     phot, err = convert_magnitude_to_maggie(phot_mag, err_mag)
+    # elif units == 'jy':
+    #     flux_maggie, err_maggie = convert_magnitude_to_maggie(phot_mag, err_mag)
+    #     phot = convert_maggie_to_janksy(flux_maggie)
+    #     err = convert_maggie_to_janksy(err_maggie)
+    # elif units == 'cgs':
+    #     # TODO: add conversion for cgs units    
+    #     pass
+
+    # if not return_none:
+    #     if return_quantity:
+    #         return jwst_filters, phot, err
+    #     else:
+    #         return jwst_filters, phot.value, err.value
+    # else:
+    #     return None, None, None
+
+
 def load_prism_data(prism_dir, name, version, extra_nod, flux_units, return_quantities=False, return_units=False):
 
-    # Open file
-    file_name = f'{name}_prism_clear_v{version:.1f}_{extra_nod}_1D.fits'
-    file_path = os.path.join(prism_dir, file_name)
-    hdul = fits.open(file_path)
+    # Load FITS file
+    spec_name = f'{name}_prism_clear_v{version:.1f}_{extra_nod}_1D.fits'
+    spec_path = os.path.join(prism_dir, spec_name)
+    hdul = fits.open(spec_path)
 
     # Access spectral data
     # -- wavelength
@@ -55,10 +92,10 @@ def load_prism_data(prism_dir, name, version, extra_nod, flux_units, return_quan
 
 def load_grating_data(grating_dir, name, grating, filter, flux_units, return_quantities=False, return_units=False):
 
-    # Load FITS HDUs
-    file_name = f"{name}_nirspec_{grating.lower()}_{filter.lower()}_1D.fits"
-    file_path = os.path.join(grating_dir, file_name)
-    hdul = fits.open(file_path)
+    # Load FITS file
+    spec_name = f"{name}_nirspec_{grating.lower()}_{filter.lower()}_1D.fits"
+    spec_path = os.path.join(grating_dir, spec_name)
+    hdul = fits.open(spec_path)
 
     # Extract spectral data
     # -- wavelength
@@ -213,6 +250,8 @@ def main():
     errs_ujy = []
     errs_cgs = []
     masks = []
+
+    load_photometry_data(phot_dir, name, flux_units='maggie')
     
     # Loop over each spectrum
     for i, spec_name in enumerate(spec_names):

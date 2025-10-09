@@ -1,3 +1,5 @@
+import numpy as np
+
 import astropy.units as u
 
 # ----------------------
@@ -32,7 +34,7 @@ def convert_wave_um_to_m(wave_um, return_quantity=False, return_unit=False):
     if not isinstance(wave_um, u.Quantity):
         wave_um = wave_um * u.um
 
-    # Convert wavelength to microns
+    # Convert wavelength to metres
     wave_m = wave_um.to(u.m)
     wave_unit = u.m
 
@@ -56,7 +58,7 @@ def convert_flux_jy_to_ujy(flux_jy, err_jy, return_quantity=False, return_unit=F
     if not isinstance(err_jy, u.Quantity):
         err_jy = err_jy * u.Jy
 
-    # Convert flux to microjansky
+    # convert to microjanskies
     flux_ujy = flux_jy.to(u.uJy)
     err_ujy = err_jy.to(u.uJy)
     flux_unit = u.uJy
@@ -81,7 +83,7 @@ def convert_flux_ujy_to_jy(flux_ujy, err_ujy, return_quantity=False, return_unit
     if not isinstance(err_ujy, u.Quantity):
         err_ujy = err_ujy * u.uJy
 
-    # Convert flux to microjansky
+    # convert to microjanskies
     flux_jy = flux_ujy.to(u.Jy)
     err_jy = err_ujy.to(u.Jy)
     flux_unit = u.Jy
@@ -108,7 +110,7 @@ def convert_flux_si_to_jy(wave_m, flux_si, err_si, return_quantity=False, return
     if not isinstance(err_si, u.Quantity):
         err_si = err_si * u.Unit('W / m3')
 
-    # Convert flux to janksies
+    # convert to janksies
     flux_unit = u.Jy
     flux_jy = flux_si.to(flux_unit, equivalencies=u.spectral_density(wave_m))
     err_jy = err_si.to(flux_unit, equivalencies=u.spectral_density(wave_m))
@@ -139,7 +141,7 @@ def convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor, return_quantity=
     if not isinstance(err_jy, u.Quantity):
         err_jy = err_jy * u.Jy
 
-    # Convert flux to cgs units
+    # convert to cgs units
     # if isinstance(cgs_factor, None):
     #     flux_unit = u.erg/(u.s * u.cm**2 * u.AA)
     # else:    
@@ -167,3 +169,32 @@ def convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor, return_quantity=
             return flux_cgs, err_cgs
         else:
             return flux_cgs.value, err_cgs.value
+
+
+def convert_magnitude_to_maggie(flux_mag, err_mag, return_quantity=False, return_unit=False):
+    """ Convert flux from magnitudes to maggies
+    """
+
+    # Assign units
+    if not isinstance(flux_mag, u.Quantity):
+        flux_mag = flux_mag * u.mag
+    if not isinstance(err_mag, u.Quantity):
+        err_mag = err_mag * u.mag
+
+    # convert to maggies
+    flux_unit = u.dimensionless_unscaled
+    flux_maggie = (10.0 ** (-0.4 * flux_mag.value)) * flux_unit
+    factor = 0.4 * np.log(10.0)
+    err_maggie = np.abs(flux_maggie.value * factor * err_mag.value) * flux_unit
+
+    # Optionally return quantity and unit
+    if return_unit:
+        if return_quantity:
+            return flux_maggie, err_maggie, flux_unit
+        else:
+            return flux_maggie.value, err_maggie.value, flux_unit
+    else:
+        if return_quantity:
+            return flux_maggie, err_maggie
+        else:
+            return flux_maggie.value, err_maggie.value

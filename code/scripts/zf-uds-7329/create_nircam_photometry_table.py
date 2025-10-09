@@ -1,5 +1,5 @@
 import numpy as np
-from astropy.table import Table
+from astropy.table import Table, QTable
 import astropy.units as u
 import os
 
@@ -16,19 +16,19 @@ if noise_floor:
     # -- impose noise floor
     noise_frac = 0.05  # 5% floor from Johnson et al. (2021)
     noise_err_mag = 2.5 * np.log10(1 + noise_frac)  # convert fraction to magnitude
-    phot_err = np.full_like(phot, noise_err_mag)
+    err = np.full_like(phot, noise_err_mag)
 elif systematic_floor:
     # -- use systematic uncertainties
-    phot_err = np.array([0.034, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02])  # 0.02 systematic error floor from Glazebrook et al. (2024)
+    err = np.array([0.034, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02])  # 0.02 systematic error floor from Glazebrook et al. (2024)
 else:
     # -- use direct uncertainty
-    phot_err = np.array([0.034, 0.009, 0.002, 0.001, 0.001, 0.001, 0.001])
+    err = np.array([0.034, 0.009, 0.002, 0.001, 0.001, 0.001, 0.001])
 
 # Build the table
-tb = Table()
+tb = QTable()
 tb['FILTER'] = jwst_filter_names
-tb['DATA'] = phot * u.mag  # assign magnitude units
-tb['ERR'] = phot_err * u.mag
+tb['DATA'] = phot * u.mag
+tb['ERR'] = err * u.mag
 
 # Save as an astropy Table
 out_dir = '/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/photometry'
