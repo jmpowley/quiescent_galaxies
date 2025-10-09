@@ -127,7 +127,7 @@ def convert_flux_si_to_jy(wave_m, flux_si, err_si, return_quantity=False, return
         else:
             return flux_jy.value, err_jy.value
 
-def convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor, return_quantity=False, return_unit=False):
+def convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1.0, return_quantity=False, return_unit=False):
     """Convert flux values from janksies to cgs units
 
     Optionally, supply `cgs_factor` to scale orders of magnitude or return result as `astropy.units.quantity.Quantity` object
@@ -142,9 +142,6 @@ def convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor, return_quantity=
         err_jy = err_jy * u.Jy
 
     # convert to cgs units
-    # if isinstance(cgs_factor, None):
-    #     flux_unit = u.erg/(u.s * u.cm**2 * u.AA)
-    # else:    
     flux_unit = u.erg/(u.s * u.cm**2 * u.AA) * cgs_factor
     flux_cgs = flux_jy.to(flux_unit, equivalencies=u.spectral_density(wave_m))
     err_cgs = err_jy.to(flux_unit, equivalencies=u.spectral_density(wave_m))
@@ -169,7 +166,6 @@ def convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor, return_quantity=
             return flux_cgs, err_cgs
         else:
             return flux_cgs.value, err_cgs.value
-
 
 def convert_magnitude_to_maggie(flux_mag, err_mag, return_quantity=False, return_unit=False):
     """ Convert flux from magnitudes to maggies
@@ -198,3 +194,28 @@ def convert_magnitude_to_maggie(flux_mag, err_mag, return_quantity=False, return
             return flux_maggie, err_maggie
         else:
             return flux_maggie.value, err_maggie.value
+        
+def convert_maggie_to_jy(flux_maggie, err_maggie, return_quantity=False, return_unit=False):
+
+    # Assign units
+    if not isinstance(flux_maggie, u.Quantity):
+        flux_maggie = flux_maggie * u.dimensionless_unscaled
+    if not isinstance(err_maggie, u.Quantity):
+        err_maggie = err_maggie * u.dimensionless_unscaled
+
+    # Convert to janskies
+    flux_unit =  u.Jy
+    flux_jy = flux_maggie * 3631 * flux_unit
+    err_jy = err_maggie * 3631 * flux_unit
+    
+    # Optionally return quantity and unit
+    if return_unit:
+        if return_quantity:
+            return flux_jy, err_jy, flux_unit
+        else:
+            return flux_jy.value, err_jy.value, flux_unit
+    else:
+        if return_quantity:
+            return flux_jy, err_jy
+        else:
+            return flux_jy.value, err_jy.value
