@@ -47,6 +47,45 @@ def convert_wave_um_to_m(wave_um, return_quantity=False, return_unit=False):
     else:
         return wave_m if return_quantity else wave_m.value
 
+def convert_wave_um_to_A(wave_um, return_quantity=False, return_unit=False):
+
+    # Assign units
+    if not isinstance(wave_um, u.Quantity):
+        wave_um = wave_um * u.um
+
+    # Convert wavelength to metres
+    wave_A = wave_um.to(u.AA)
+    wave_unit = u.AA
+
+    # Optionally return unit and quantity 
+    if return_unit:
+        if return_quantity:
+            return wave_A, wave_unit
+        else:
+            return wave_A.value, wave_unit
+    else:
+        return wave_A if return_quantity else wave_A.value
+    
+def convert_wave_m_to_A(wave_m, return_quantity=False, return_unit=False):
+
+    # Assign units
+    if not isinstance(wave_m, u.Quantity):
+        wave_m = wave_m * u.m
+
+    # Convert wavelength to metres
+    wave_A = wave_m.to(u.AA)
+    wave_unit = u.AA
+
+    # Optionally return unit and quantity 
+    if return_unit:
+        if return_quantity:
+            return wave_A, wave_unit
+        else:
+            return wave_A.value, wave_unit
+    else:
+        return wave_A if return_quantity else wave_A.value
+
+
 # -----------------------------
 # Flux/flux density conversions
 # -----------------------------
@@ -167,7 +206,7 @@ def convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1.0, return_quant
         else:
             return flux_cgs.value, err_cgs.value
 
-def convert_magnitude_to_maggie(flux_mag, err_mag, return_quantity=False, return_unit=False):
+def convert_flux_magnitude_to_maggie(flux_mag, err_mag, return_quantity=False, return_unit=False):
     """ Convert flux from magnitudes to maggies
     """
 
@@ -195,7 +234,7 @@ def convert_magnitude_to_maggie(flux_mag, err_mag, return_quantity=False, return
         else:
             return flux_maggie.value, err_maggie.value
         
-def convert_maggie_to_jy(flux_maggie, err_maggie, return_quantity=False, return_unit=False):
+def convert_flux_maggie_to_jy(flux_maggie, err_maggie, return_quantity=False, return_unit=False):
 
     # Assign units
     if not isinstance(flux_maggie, u.Quantity):
@@ -219,3 +258,28 @@ def convert_maggie_to_jy(flux_maggie, err_maggie, return_quantity=False, return_
             return flux_jy, err_jy
         else:
             return flux_jy.value, err_jy.value
+
+def convert_flux_jy_to_maggie(flux_jy, err_jy, return_quantity=False, return_unit=False):
+
+    # Assign units
+    if not isinstance(flux_jy, u.Quantity):
+        flux_jy = flux_jy * u.Jy
+    if not isinstance(err_jy, u.Quantity):
+        err_jy = err_jy * u.Jy
+
+    # Convert to janskies
+    flux_unit =  u.dimensionless_scaled
+    flux_maggie = flux_maggie / 3631 * flux_unit
+    err_maggie = err_maggie / 3631 * flux_unit
+    
+    # Optionally return quantity and unit
+    if return_unit:
+        if return_quantity:
+            return flux_maggie, err_maggie, flux_unit
+        else:
+            return flux_maggie.value, err_maggie.value, flux_unit
+    else:
+        if return_quantity:
+            return flux_maggie, err_maggie
+        else:
+            return flux_maggie.value, err_maggie.value

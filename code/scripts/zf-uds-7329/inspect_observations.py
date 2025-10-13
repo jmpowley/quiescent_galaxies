@@ -7,7 +7,7 @@ import astropy.units as u
 from astropy.io import fits
 from astropy.table import Table
 
-from conversions import convert_wave_um_to_m, convert_wave_m_to_um, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_si_to_jy, convert_magnitude_to_maggie, convert_maggie_to_jy
+from conversions import convert_wave_um_to_m, convert_wave_m_to_um, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_si_to_jy, convert_flux_magnitude_to_maggie, convert_flux_maggie_to_jy
 
 # ----------------------
 # Functions to load data
@@ -30,39 +30,20 @@ def load_photometry_data(phot_dir, name, flux_units, return_quantities=False, re
 
     # Convert units
     if flux_units == 'maggie':
-        flux_maggie, err_maggie = convert_magnitude_to_maggie(flux_mag, err_mag)
+        flux_maggie, err_maggie = convert_flux_magnitude_to_maggie(flux_mag, err_mag)
         flux, err = flux_maggie, err_maggie
     elif flux_units == 'jy':
-        flux_maggie, err_maggie = convert_magnitude_to_maggie(flux_mag, err_mag)
-        flux_jy, err_jy = convert_maggie_to_jy(flux_maggie, err_maggie)
+        flux_maggie, err_maggie = convert_flux_magnitude_to_maggie(flux_mag, err_mag)
+        flux_jy, err_jy = convert_flux_maggie_to_jy(flux_maggie, err_maggie)
         flux, err = flux_jy, err_jy
     elif flux_units == 'cgs':
-        flux_maggie, err_maggie = convert_magnitude_to_maggie(flux_mag, err_mag)
-        flux_jy, err_jy = convert_maggie_to_jy(flux_maggie, err_maggie)
+        flux_maggie, err_maggie = convert_flux_magnitude_to_maggie(flux_mag, err_mag)
+        flux_jy, err_jy = convert_flux_maggie_to_jy(flux_maggie, err_maggie)
         pivot_m = convert_wave_um_to_m(pivot_um)
         flux_cgs, err_cgs = convert_flux_jy_to_cgs(pivot_m, flux_jy, err_jy, cgs_factor=1e-19)
         flux, err = flux_cgs, err_cgs
-
-    # # Convert units
-    # if units == 'original':
-    #     pass
-    # elif units == 'maggie':
-    #     phot, err = convert_magnitude_to_maggie(phot_mag, err_mag)
-    # elif units == 'jy':
-    #     flux_maggie, err_maggie = convert_magnitude_to_maggie(phot_mag, err_mag)
-    #     phot = convert_maggie_to_janksy(flux_maggie)
-    #     err = convert_maggie_to_janksy(err_maggie)
-    # elif units == 'cgs':
-    #     # TODO: add conversion for cgs units    
-    #     pass
-
-    # if not return_none:
-    #     if return_quantity:
-    #         return jwst_filters, phot, err
-    #     else:
-    #         return jwst_filters, phot.value, err.value
-    # else:
-    #     return None, None, None
+    else:
+        pass
 
     return pivot_um, flux, err, mask, sedpy_filters
 

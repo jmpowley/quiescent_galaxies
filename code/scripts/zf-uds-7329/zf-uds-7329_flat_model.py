@@ -19,133 +19,8 @@ from prospect.likelihood.kernels import Uncorrelated
 from prospect.fitting import fit_model, lnprobfn
 from prospect.io import write_results as writer
 
-# Functions for converting units
-@u.quantity_input
-def convert_janksy_to_maggie(flux_jy: u.Jy):
-    flux_maggie = (flux_jy / (3631 * u.Jy)).decompose().value
-    return flux_maggie
+from loading import load_photometry_data, load_prism_data, load_grism_data
 
-def convert_magnitude_to_maggie(flux_mag : u.mag, err_mag : u.mag):
-    """ Convert flux from magnitudes to maggies
-    1 magntiude = 10
-    """
-
-    flux_maggie = (10.0 ** (-0.4 * flux_mag.value)) * u.dimensionless_unscaled
-    factor = 0.4 * np.log(10.0)
-    err_maggie = (flux_maggie.value * factor * err_mag.value) * u.dimensionless_unscaled
-
-    return flux_maggie, err_maggie
-
-def convert_maggie_to_janksy(flux_maggie: u.dimensionless_unscaled):
-    """
-    Convert flux from maggies to Janskys (AB system).
-    1 maggie = 3631 Jy
-    """
-
-    flux_jy = flux_maggie * 3631 * u.Jy
-
-    return flux_jy
-
-# TODO: add conversion for cgs units
-
-# --------------------------
-# Functions for loading data
-# --------------------------
-def load_prism_data(spec_dir, name, version, extra_nod, units, return_quantity, return_none):
-
-    # Open file
-    file_name = f'{name}_prism_clear_v{version:.1f}_{extra_nod}_1D.fits'
-    file_path = os.path.join(spec_dir, file_name)
-    hdu = fits.open(file_path)
-
-    # Access spectral data
-    wave = hdu['WAVELENGTH'].data
-    flux = hdu['DATA'].data
-    err = hdu['ERR'].data
-
-    # Assign units
-    wave = wave * u.m
-    flux = flux * u.Unit('W / m3')
-    err = err * u.Unit('W / m3')
-
-    # Check for correct units
-    all_units = ['original', 'maggie', 'jy', 'cgs']
-    if units not in all_units:
-        raise Exception(f"Incorrect units argument. You must select from {[unit for unit in all_units]}")
-
-    # Convert units
-    if units == 'original':
-        pass
-    elif units == 'cgs':
-        wave = wave.to(u.um)
-        flux = flux.to(u.erg/(u.s * u.cm**2 * u.AA))
-        err = err.to(u.erg/(u.s * u.cm**2 * u.AA))
-    elif units == 'jy':
-        wave = wave.to(u.um)
-        # flux_cgs = flux.to(u.erg/(u.s * u.cm**2 * u.AA))
-        # err_cgs = err.to(u.erg/(u.s * u.cm**2 * u.AA))
-        # flux = flux_cgs.to(u.Jy)
-        # err = err_cgs.to(u.Jy)
-        flux = flux.to(u.Jy, equivalencies=u.spectral_density(wave))
-        err = err.to(u.Jy, equivalencies=u.spectral_density(wave))
-    elif units == 'maggies':
-        wave = wave.to(u.AA)
-        flux_jy = flux.to(u.Jy, equivalencies=u.spectral_density(wave))
-        err_jy = err.to(u.Jy, equivalencies=u.spectral_density(wave))
-        flux = convert_janksy_to_maggie(flux_jy)
-        err = convert_janksy_to_maggie(err_jy)
-
-    if not return_none:
-        if return_quantity:
-            return wave, flux, err
-        else:
-            return wave.value, flux.value, err.value
-    else:
-        return None, None, None
-
-def load_photometry_data(phot_dir, name, units, return_quantity, return_none):
-
-    # Open table
-    tb_name = f'{name}_nircam_photometry.fits'
-    tb_path = os.path.join(phot_dir, tb_name)
-    tb = Table.read(tb_path)
-
-    # Access photometry data
-    filters = tb['FILTER'].tolist()
-    jwst_filters = ([f'jwst_{filt}' for filt in filters])  # change to sedpy names
-    phot = tb['DATA'].data
-    err = tb['ERR'].data
-
-    # Assign units
-    phot_mag = phot * u.mag
-    err_mag = err * u.mag
-
-    # Check for correct units
-    all_units = ['original', 'maggie', 'jy', 'cgs']
-    if units not in all_units:
-        raise Exception(f"Incorrect units argument. You must select from {[unit for unit in all_units]}")
-
-    # Convert units
-    if units == 'original':
-        pass
-    elif units == 'maggie':
-        phot, err = convert_magnitude_to_maggie(phot_mag, err_mag)
-    elif units == 'jy':
-        flux_maggie, err_maggie = convert_magnitude_to_maggie(phot_mag, err_mag)
-        phot = convert_maggie_to_janksy(flux_maggie)
-        err = convert_maggie_to_janksy(err_maggie)
-    elif units == 'cgs':
-        # TODO: add conversion for cgs units    
-        pass
-
-    if not return_none:
-        if return_quantity:
-            return jwst_filters, phot, err
-        else:
-            return jwst_filters, phot.value, err.value
-    else:
-        return None, None, None
-    
 # ----------------------------
 # Functions for building model
 # ----------------------------
@@ -206,6 +81,9 @@ def build_obs(obs_params):
 
     prism_params = obs_params['prism_params']
     phot_params = obs_params['phot_params']
+    grat1_params = obs_params['grat1_params']
+    grat2_params = obs_params['grat2_params']
+    grat3_params = obs_params['grat3_params']
 
     # Load data
     # TODO: Add masks to spectra and photometry
@@ -213,25 +91,35 @@ def build_obs(obs_params):
     phot_filters, phot_flux, phot_err = load_photometry_data(**phot_params)
     # -- prism data
     prism_wave, prism_flux, prism_err = load_prism_data(**prism_params)
-    # TODO: medium grating data
+    # -- grating data
+    grat1_wave, grat1_flux, grat1_err = load_grism_data(**grat1_params)
+    grat2_wave, grat2_flux, grat2_err = load_grism_data(**grat2_params)
+    grat3_wave, grat3_flux, grat3_err = load_grism_data(**grat3_params)
 
     # Create Photometry and Spectrum classes
     # -- nircam photometry
     phot = Photometry(filters=phot_filters, flux=phot_flux,
                        uncertainty=phot_err, mask=None)
     # -- prism spectrum
-    prism_spec = Spectrum(wavelength=prism_wave, flux=prism_flux, 
-                    uncertainty=prism_err)
-    prism_polyspec = PolySpectrum(wavelength=prism_wave, flux=prism_flux, 
-                    uncertainty=prism_err, polynomial_order=7)  # optimise polynomial spectral calibration (or set as prior in model)
+    prism_spec = Spectrum(wavelength=prism_wave, flux=prism_flux, uncertainty=prism_err)
+    prism_polyspec = PolySpectrum(wavelength=prism_wave, flux=prism_flux, uncertainty=prism_err, polynomial_order=10)  # optimise polynomial spectral calibration (or set as prior in model)
     # -- medium-grating spectrum
-    # TODO: Add medium grating spectra
+    grat1_spec = Spectrum(wavelength=grat1_wave, flux=grat1_flux, uncertainty=grat1_err)
+    grat1_polyspec = PolySpectrum(wavelength=grat1_wave, flux=grat1_flux, uncertainty=grat1_err, polynomial_order=10)
+    grat2_spec = Spectrum(wavelength=grat2_wave, flux=grat2_flux, uncertainty=grat2_err)
+    grat2_polyspec = PolySpectrum(wavelength=grat2_wave, flux=grat2_flux, uncertainty=grat2_err, polynomial_order=10)
+    grat3_spec = Spectrum(wavelength=grat3_wave, flux=grat3_flux, uncertainty=grat3_err)
+    grat3_polyspec = PolySpectrum(wavelength=grat3_wave, flux=grat3_flux, uncertainty=grat3_err, polynomial_order=10)
 
     # Build obs from spectrum and photometry
     # -- ensures all required keys are present for fitting
     phot.rectify()
     prism_spec.rectify()
-    obs = [phot, prism_spec]
+    grat1_spec.rectify()
+    grat2_spec.rectify()
+    grat3_spec.rectify()
+    # -- complile observations
+    obs = [phot, prism_spec, grat1_spec, grat2_spec, grat3_spec]
 
     return obs
 
@@ -277,7 +165,7 @@ def build_model(model_kwargs):
     model_params["zred"]["prior"] = priors.TopHat(mini=3.0, maxi=3.4)
 
     # Set IMF
-    model_params['imf_type']['init'] = 2 # Kroupa IMF
+    model_params['imf_type']['init'] = 2  # Kroupa IMF
 
     # Set SFH prior
     # -- fix number of SFH bins
@@ -285,7 +173,7 @@ def build_model(model_kwargs):
     model_params["nbins_sfh"] = dict(N=1, isfree=False, init=nbins_sfh)
     model_params['agebins']['N'] = nbins_sfh
     model_params['mass']['N'] = nbins_sfh
-    model_params['logsfr_ratios']['N'] = nbins_sfh - 1  # 
+    model_params['logsfr_ratios']['N'] = nbins_sfh - 1
     # -- set logSFR bin ratios
     model_params['logsfr_ratios']['init'] = np.full(nbins_sfh - 1, 0.0)  # logSFR = 0 means constant SFH
     model_params['logsfr_ratios']['prior'] = priors.StudentT(mean=np.full(nbins_sfh-1, 0.0),
@@ -396,7 +284,8 @@ def main():
     fit_obs = {
         'phot' : True,
         'prism' : False,
-        'grating' : False,
+        'grating1' : False,
+        'grating2' : False,
     }
 
     obs_params = {
@@ -404,22 +293,44 @@ def main():
          'phot_params' : {
             'phot_dir' : '/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/photometry',
             'name' : 'zf-uds-7329',
-            'units' : 'maggie',
-            'return_quantity' : False,
+            'flux_units' : 'maggie',
             'return_none' : not fit_obs['phot'],
         },
 
         'prism_params' : {
-            'spec_dir' : '/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra',
-            # 'name' : '007329',
+            'prism_dir' : '/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra',
             'name' : 'zf-uds-7329',
-            # 'name' : '013079',
             'version' : 3.1,
-             # 'version' : 1.1,
             'extra_nod' : 'extr5',
-            'units' : 'maggie',
-            'return_quantity' : False,
+            'flux_units' : 'maggie',
             'return_none' : not fit_obs['prism'],
+        },
+
+        'grat1_params' : {
+             'grating_dir' : '/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra',
+             'name' : 'zf-uds-7329',
+             'grating' : 'g140m',
+             'filter' : 'f100lp',
+             'flux_units' : 'maggie',
+             'return_none' : not fit_obs['grating1'],
+        },
+
+        'grat2_params' : {
+             'grating_dir' : '/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra',
+             'name' : 'zf-uds-7329',
+             'grating' : 'g235m',
+             'filter' : 'f170lp',
+             'flux_units' : 'maggie',
+             'return_none' : not fit_obs['grating2'],
+        },
+
+        'grat3_params' : {
+             'grating_dir' : '/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra',
+             'name' : 'zf-uds-7329',
+             'grating' : 'g395m',
+             'filter' : 'f290lp',
+             'flux_units' : 'maggie',
+             'return_none' : not fit_obs['grating3'],
         },
     }
 
@@ -449,9 +360,12 @@ def main():
     # -- optimize kwargs
     # run_params["min_method"] = 'lm'
     # -- emcee kwargs
-    run_params["nwalkers"] = 128  # numebr of walkers
-    run_params["niter"] = 512  # number of iterations of the MCMC sampling
-    run_params["nburn"] = [16, 32, 64]  # number of iterations in each round of burn-in
+    # run_params["nwalkers"] = 128  # numebr of walkers
+    # run_params["niter"] = 512  # number of iterations of the MCMC sampling
+    # run_params["nburn"] = [16, 32, 64]  # number of iterations in each round of burn-in
+    # -- dynesty kwargs
+    # -- nautilus kwargs
+    # run_params['']
 
     # Select observations
     new_obs = [o for o, k in zip(obs, fit_obs.keys()) if fit_obs.get(k, True)]
