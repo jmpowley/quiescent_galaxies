@@ -47,6 +47,25 @@ def convert_wave_um_to_m(wave_um, return_quantity=False, return_unit=False):
     else:
         return wave_m if return_quantity else wave_m.value
 
+def convert_wave_A_to_um(wave_A, return_quantity=False, return_unit=False):
+
+    # Assign units
+    if not isinstance(wave_A, u.Quantity):
+        wave_A = wave_A * u.AA
+
+    # Convert wavelength to microns
+    wave_um = wave_A.to(u.um)
+    wave_unit = u.um
+
+    # Optionally return unit and quantity 
+    if return_unit:
+        if return_quantity:
+            return wave_um, wave_unit
+        else:
+            return wave_um.value, wave_unit
+    else:
+        return wave_um if return_quantity else wave_um.value
+    
 def convert_wave_um_to_A(wave_um, return_quantity=False, return_unit=False):
 
     # Assign units
@@ -268,9 +287,9 @@ def convert_flux_jy_to_maggie(flux_jy, err_jy, return_quantity=False, return_uni
         err_jy = err_jy * u.Jy
 
     # Convert to janskies
-    flux_unit =  u.dimensionless_scaled
-    flux_maggie = flux_maggie / 3631 * flux_unit
-    err_maggie = err_maggie / 3631 * flux_unit
+    flux_unit =  u.dimensionless_unscaled
+    flux_maggie = flux_jy / 3631 * flux_unit
+    err_maggie = err_jy / 3631 * flux_unit
     
     # Optionally return quantity and unit
     if return_unit:

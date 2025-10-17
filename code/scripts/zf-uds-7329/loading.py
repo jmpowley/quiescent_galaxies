@@ -5,12 +5,14 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
+from sedpy.observate import load_filters
+
 from conversions import convert_wave_um_to_m, convert_wave_m_to_um, convert_wave_um_to_A, convert_wave_m_to_A, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_si_to_jy, convert_flux_magnitude_to_maggie, convert_flux_maggie_to_jy, convert_flux_jy_to_maggie
 
 # ----------------------
 # Functions to load data
 # ----------------------
-def load_photometry_data(phot_dir, name, wave_units, flux_units, return_quantities=False, return_units=False):
+def load_photometry_data(phot_dir, name, wave_units, flux_units, return_none=False, return_quantities=False, return_units=False):
 
     # Load table
     phot_name = f"{name}_nircam_photometry.fits"
@@ -24,7 +26,8 @@ def load_photometry_data(phot_dir, name, wave_units, flux_units, return_quantiti
     err_mag = phot_tb["ERR"].data
     mask = phot_tb["VALID"].data.astype(bool)
 
-    sedpy_filters = ([f"jwst_{filt}" for filt in filters])  # change to sedpy names
+    jwst_filters = ([f"jwst_{filt}" for filt in filters])
+    sedpy_filters = load_filters(jwst_filters)
 
     # Convert units
     # -- flux
@@ -52,9 +55,12 @@ def load_photometry_data(phot_dir, name, wave_units, flux_units, return_quantiti
     else:
         pass
 
-    return pivot, flux, err, mask, sedpy_filters
+    if return_none:
+        return None, None, None, None
+    else:
+        return sedpy_filters, flux, err, mask
 
-def load_prism_data(prism_dir, name, version, extra_nod, wave_units, flux_units, return_quantities=False, return_units=False):
+def load_prism_data(prism_dir, name, version, extra_nod, wave_units, flux_units, return_none=False, return_quantities=False, return_units=False):
 
     # Load FITS file
     spec_name = f"{name}_prism_clear_v{version:.1f}_{extra_nod}_1D.fits"
@@ -103,9 +109,12 @@ def load_prism_data(prism_dir, name, version, extra_nod, wave_units, flux_units,
     else:
         pass
 
-    return wave, flux, err, mask
+    if return_none:
+        return None, None, None, None
+    else:
+        return wave, flux, err, mask
 
-def load_grating_data(grating_dir, name, grating, filter, wave_units, flux_units, return_quantities=False, return_units=False):
+def load_grating_data(grating_dir, name, grating, filter, wave_units, flux_units, return_none=False, return_quantities=False, return_units=False):
 
     # Load FITS file
     spec_name = f"{name}_nirspec_{grating.lower()}_{filter.lower()}_1D.fits"
@@ -140,12 +149,14 @@ def load_grating_data(grating_dir, name, grating, filter, wave_units, flux_units
         flux, err = flux_cgs, err_cgs
     # -- wavelength
     if wave_units == 'um':
-        wave_um = convert_wave_m_to_um(wave_m)
         wave = wave_um
     if wave_units == 'A':
-        wave_A = convert_wave_m_to_A(wave_m)
+        wave_A = convert_wave_um_to_A(wave_um)
         wave = wave_A
     else:
         pass
 
-    return wave, flux, err, mask
+    if return_none:
+        return None, None, None, None
+    else:
+        return wave, flux, err, mask
