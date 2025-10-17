@@ -3,7 +3,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from conversions import convert_wave_um_to_m, convert_wave_m_to_um, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_si_to_jy, convert_flux_magnitude_to_maggie, convert_flux_maggie_to_jy, convert_flux_jy_to_maggie
+from conversions import convert_wave_um_to_m, convert_wave_m_to_um, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_jy_to_maggie, convert_wave_A_to_m
 from loading import load_photometry_data, load_prism_data, load_grating_data
 
 # ----------------------
@@ -206,7 +206,8 @@ def plot_four_panel_spectra_for_unit(spec, phot, flux_unit):
     phot_pivots_um, phot_fluxes_ujy, phot_fluxes_cgs, phot_fluxes_maggies, phot_errs_ujy, phot_errs_cgs, phot_errs_maggies, phot_mask, phot_filters = phot
 
     # Create figure
-    fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(12, 8))
+    nrows, ncols = 2, 2
+    fig, ax = plt.subplots(nrows, ncols, figsize=(12, 8))
 
     # Colors for plotting
     spec_colors = ['red', 'blue', 'green', 'orange']
@@ -226,13 +227,7 @@ def plot_four_panel_spectra_for_unit(spec, phot, flux_unit):
     for i, (wave_um, flux, err, mask, spec_name, color) in enumerate(zip(spec_waves_um, spec_fluxes, spec_errs, spec_masks, spec_names, spec_colors)):
 
         # Initialise row and column
-        r = i // 2
-        c = i % 2
-
-        # Multiply flux by scaling factor
-        factor = 1.86422
-        flux = flux * factor
-        err = err * factor
+        r, c = divmod(i, ncols)
 
         # Set all masked data to nan
         wave_um[~mask] = np.nan
@@ -282,14 +277,12 @@ def main():
     spec_masks = []
 
     # Load photometry data
-    phot_filters, phot_fluxes_jy, phot_errs_jy, phot_mask = load_photometry_data(phot_dir, name, wave_units='um', flux_units='jy')
+    phot_filters, phot_fluxes_jy, phot_errs_jy, phot_mask = load_photometry_data(phot_dir, name, flux_units='jy', snr_limit=20)
     phot_fluxes_ujy, phot_errs_ujy = convert_flux_jy_to_ujy(phot_fluxes_jy, phot_errs_jy)
-
-    print(phot_filters)
-
-    # phot_pivot_m = convert_wave_um_to_m(phot_pivot_um)
-    phot_pivot_m = 5
-    phot_fluxes_cgs, phot_errs_cgs = convert_flux_jy_to_cgs(phot_pivot_m, phot_fluxes_jy, phot_errs_jy, cgs_factor=1e-19)
+    phot_waveffs_A = [f.wave_effective for f in phot_filters]
+    phot_waveffs_m = convert_wave_A_to_m(phot_waveffs_A)
+    phot_waveffs_um = convert_wave_m_to_um(phot_waveffs_m)
+    phot_fluxes_cgs, phot_errs_cgs = convert_flux_jy_to_cgs(phot_waveffs_m, phot_fluxes_jy, phot_errs_jy, cgs_factor=1e-19)
     phot_fluxes_maggies, phot_errs_maggies = convert_flux_jy_to_maggie(phot_fluxes_jy, phot_errs_jy)
     
     # Loop over each spectrum
@@ -298,7 +291,7 @@ def main():
         # Load data
         # -- prism
         if spec_name == 'prism':
-            wave_um, flux_ujy, err_ujy, mask = load_prism_data(spec_dir, name, version=3.1, extra_nod='extr5', wave_units='um', flux_units='ujy', return_quantities=False, return_units=False)
+            wave_um, flux_ujy, err_ujy, mask = load_prism_data(spec_dir, name, version=3.1, extra_nod='extr5', wave_units='um', flux_units='ujy', rescale_factor=1.86422, snr_limit=20)
             flux_jy, err_jy = convert_flux_ujy_to_jy(flux_ujy, err_ujy)
             wave_m = convert_wave_um_to_m(wave_um)
             flux_cgs, err_cgs = convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
@@ -310,7 +303,7 @@ def main():
 
             # Load in data with different units
             # -- microjanskies
-            wave_um, flux_ujy, err_ujy, mask = load_grating_data(spec_dir, name, grating=grat, filter=filt, wave_units='um', flux_units='ujy')
+            wave_um, flux_ujy, err_ujy, mask = load_grating_data(spec_dir, name, grating=grat, filter=filt, wave_units='um', flux_units='ujy', rescale_factor=1.86422, snr_limit=20)
             # -- cgs units
             flux_jy, err_jy = convert_flux_ujy_to_jy(flux_ujy, err_ujy)
             wave_m = convert_wave_um_to_m(wave_um)
@@ -331,9 +324,9 @@ def main():
 
     # Make lists to store variables
     spec = [spec_waves_um, spec_fluxes_ujy, spec_fluxes_cgs, spec_fluxes_maggies, spec_errs_ujy, spec_errs_cgs, spec_errs_maggies, spec_masks, spec_names]
-    phot = [phot_pivot_um, phot_fluxes_ujy, phot_fluxes_cgs, phot_fluxes_maggies, phot_errs_ujy, phot_errs_cgs, phot_errs_maggies, phot_mask, phot_filters]
+    phot = [phot_waveffs_um, phot_fluxes_ujy, phot_fluxes_cgs, phot_fluxes_maggies, phot_errs_ujy, phot_errs_cgs, phot_errs_maggies, phot_mask, phot_filters]
 
-    # Make plots
+    # # Make plots
     plot_spectra(spec, phot)
     plot_spectra_snr(spec_waves_um, spec_fluxes_ujy, spec_errs_ujy, spec_masks, spec_names)
     plot_four_panel_spectra_for_unit(spec, phot, flux_unit='cgs')

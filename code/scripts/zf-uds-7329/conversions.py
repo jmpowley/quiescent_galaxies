@@ -103,7 +103,25 @@ def convert_wave_m_to_A(wave_m, return_quantity=False, return_unit=False):
             return wave_A.value, wave_unit
     else:
         return wave_A if return_quantity else wave_A.value
+    
+def convert_wave_A_to_m(wave_A, return_quantity=False, return_unit=False):
 
+    # Assign units
+    if not isinstance(wave_A, u.Quantity):
+        wave_A = wave_A * u.AA
+
+    # Convert wavelength to metres
+    wave_m = wave_A.to(u.m)
+    wave_unit = u.m
+
+    # Optionally return unit and quantity 
+    if return_unit:
+        if return_quantity:
+            return wave_m, wave_unit
+        else:
+            return wave_m.value, wave_unit
+    else:
+        return wave_m if return_quantity else wave_m.value
 
 # -----------------------------
 # Flux/flux density conversions
@@ -302,3 +320,32 @@ def convert_flux_jy_to_maggie(flux_jy, err_jy, return_quantity=False, return_uni
             return flux_maggie, err_maggie
         else:
             return flux_maggie.value, err_maggie.value
+        
+def convert_flux_maggie_to_cgs(flux_maggie, err_maggie, wave_m, cgs_factor, return_quantity=False, return_unit=False):
+
+    # Assign units
+    if not isinstance(flux_maggie, u.Quantity):
+        flux_maggie = flux_maggie * u.dimensionless_unscaled
+    if not isinstance(err_maggie, u.Quantity):
+        err_maggie = err_maggie * u.dimensionless_unscaled
+
+    # Convert to janskies
+    flux_unit =  u.Jy
+    flux_jy = flux_maggie * 3631 * flux_unit
+    err_jy = err_maggie * 3631 * flux_unit
+
+    # Convert to cgs units
+    flux_unit = u.erg/(u.s * u.cm**2 * u.AA) * cgs_factor
+    flux_cgs, err_cgs = convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor, return_quantity=True)
+    
+    # Optionally return quantity and unit
+    if return_unit:
+        if return_quantity:
+            return flux_cgs, err_cgs, flux_unit
+        else:
+            return flux_cgs.value, err_cgs.value, flux_unit
+    else:
+        if return_quantity:
+            return flux_cgs, err_cgs
+        else:
+            return flux_cgs.value, err_cgs.value

@@ -8,11 +8,14 @@ from astropy.table import Table
 from sedpy.observate import load_filters
 
 from conversions import convert_wave_um_to_m, convert_wave_m_to_um, convert_wave_um_to_A, convert_wave_m_to_A, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_si_to_jy, convert_flux_magnitude_to_maggie, convert_flux_maggie_to_jy, convert_flux_jy_to_maggie
+from preprocessing import apply_snr_limit, apply_rescaling_factor
+
+from conversions import convert_flux_maggie_to_cgs
 
 # ----------------------
 # Functions to load data
 # ----------------------
-def load_photometry_data(phot_dir, name, wave_units, flux_units, return_none=False, return_quantities=False, return_units=False):
+def load_photometry_data(phot_dir, name, flux_units, snr_limit, return_none=False, return_quantities=False, return_units=False):
 
     # Load table
     phot_name = f"{name}_nircam_photometry.fits"
@@ -21,7 +24,7 @@ def load_photometry_data(phot_dir, name, wave_units, flux_units, return_none=Fal
 
     # Access photometry data
     filters = phot_tb["FILTER"].tolist()
-    pivot_um = phot_tb["PIVOT"].data
+    wave_um = phot_tb["PIVOT"].data
     flux_mag = phot_tb["DATA"].data
     err_mag = phot_tb["ERR"].data
     mask = phot_tb["VALID"].data.astype(bool)
@@ -40,27 +43,24 @@ def load_photometry_data(phot_dir, name, wave_units, flux_units, return_none=Fal
         flux, err = flux_jy, err_jy
     elif flux_units == "cgs":
         flux_maggie, err_maggie = convert_flux_magnitude_to_maggie(flux_mag, err_mag)
-        flux_jy, err_jy = convert_flux_maggie_to_jy(flux_maggie, err_maggie)
-        pivot_m = convert_wave_um_to_m(pivot_um)
-        flux_cgs, err_cgs = convert_flux_jy_to_cgs(pivot_m, flux_jy, err_jy, cgs_factor=1e-19)
+        wave_m = convert_wave_um_to_m(wave_um)
+        flux_cgs, err_cgs = convert_flux_maggie_to_cgs(flux_maggie, err_maggie, wave_m, cgs_factor=1e-19)
         flux, err = flux_cgs, err_cgs
     else:
         pass
-    # -- wavelength
-    if wave_units == 'um':
-        pivot = pivot_um
-    if wave_units == 'A':
-        pivot_A = convert_wave_um_to_A(pivot_um)
-        pivot = pivot_A
-    else:
-        pass
+
+    # Apply noise floor
+    flux, err = apply_snr_limit(flux, err, snr_limit)
 
     if return_none:
         return None, None, None, None
     else:
         return sedpy_filters, flux, err, mask
 
-def load_prism_data(prism_dir, name, version, extra_nod, wave_units, flux_units, return_none=False, return_quantities=False, return_units=False):
+def load_prism_data(prism_dir, name, version, extra_nod, wave_units, flux_units, rescale_factor, snr_limit, return_none=False, return_quantities=False, return_units=False):
+
+    if return_none:
+        return None, None, None, None
 
     # Load FITS file
     spec_name = f"{name}_prism_clear_v{version:.1f}_{extra_nod}_1D.fits"
@@ -108,14 +108,20 @@ def load_prism_data(prism_dir, name, version, extra_nod, wave_units, flux_units,
         wave = wave_A
     else:
         pass
+    
+    # Apply rescaling factor
+    flux, err = apply_rescaling_factor(flux, err, rescale_factor)
+
+    # Apply noise floor
+    flux, err = apply_snr_limit(flux, err, snr_limit)
+
+    return wave, flux, err, mask
+
+def load_grating_data(grating_dir, name, grating, filter, wave_units, flux_units, rescale_factor, snr_limit, return_none=False, return_quantities=False, return_units=False):
 
     if return_none:
         return None, None, None, None
-    else:
-        return wave, flux, err, mask
-
-def load_grating_data(grating_dir, name, grating, filter, wave_units, flux_units, return_none=False, return_quantities=False, return_units=False):
-
+    
     # Load FITS file
     spec_name = f"{name}_nirspec_{grating.lower()}_{filter.lower()}_1D.fits"
     spec_path = os.path.join(grating_dir, spec_name)
@@ -155,8 +161,11 @@ def load_grating_data(grating_dir, name, grating, filter, wave_units, flux_units
         wave = wave_A
     else:
         pass
+    
+    # Apply rescaling factor
+    flux, err = apply_rescaling_factor(flux, err, rescale_factor)
 
-    if return_none:
-        return None, None, None, None
-    else:
-        return wave, flux, err, mask
+    # Apply noise floor
+    flux, err = apply_snr_limit(flux, err, snr_limit)
+
+    return wave, flux, err, mask

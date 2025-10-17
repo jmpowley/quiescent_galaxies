@@ -1,11 +1,11 @@
+import os
+from time import time
+
 import numpy as np
 
 from astropy import cosmology
-
 from sedpy.observate import load_filters
-import os
-import h5py
-from time import time
+
 from prospect.sources.galaxy_basis import CSPSpecBasis, FastStepBasis
 from prospect.observation import Photometry, Spectrum, PolyOptCal
 from prospect.models.templates import TemplateLibrary
@@ -95,8 +95,8 @@ def build_obs(obs_params, noise=None):
     grat3_spec.rectify()
     grat3_polyspec.rectify()
     # -- complile observations
-    obs = [phot, prism_spec, grat1_spec, grat2_spec, grat3_spec]
-    # obs = [phot, prism_polyspec, grat1_polyspec, grat2_polyspec, grat3_polyspec]  # polynomial spectral calibration (or prior in model)
+    # obs = [phot, prism_spec, grat1_spec, grat2_spec, grat3_spec]
+    obs = [phot, prism_polyspec, grat1_polyspec, grat2_polyspec, grat3_polyspec]  # polynomial spectral calibration (or prior in model)
 
     return obs
 
@@ -268,8 +268,8 @@ def main():
          "phot_params" : {
             "phot_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/photometry",
             "name" : "zf-uds-7329",
-            "wave_units" : "A",
             "flux_units" : "maggie",
+            "snr_limit" : 20,
             "return_none" : not fit_obs["phot"],
         },
 
@@ -280,6 +280,8 @@ def main():
             "extra_nod" : "extr5",
             "wave_units" : "A",
             "flux_units" : "maggie",
+            "rescale_factor" : 1.86422,  # uniform scaling factor to match photometry/Glazebrook's spectrum
+            "snr_limit" : 20,
             "return_none" : not fit_obs["prism"],
         },
 
@@ -290,6 +292,8 @@ def main():
              "filter" : "f100lp",
              "wave_units" : "A",
              "flux_units" : "maggie",
+             "rescale_factor" : 1.86422,  # uniform scaling factor to match photometry/Glazebrook's spectrum
+             "snr_limit" : 20,
              "return_none" : not fit_obs["grating1"],
         },
 
@@ -300,6 +304,8 @@ def main():
              "filter" : "f170lp",
              "wave_units" : "A",
              "flux_units" : "maggie",
+             "rescale_factor" : 1.86422,  # uniform scaling factor to match photometry/Glazebrook's spectrum
+             "snr_limit" : 20,
              "return_none" : not fit_obs["grating2"],
         },
 
@@ -310,6 +316,8 @@ def main():
              "filter" : "f290lp",
              "wave_units" : "A",
              "flux_units" : "maggie",
+             "rescale_factor" : 1.86422,  # uniform scaling factor to match photometry/Glazebrook's spectrum
+             "snr_limit" : 20,
              "return_none" : not fit_obs["grating3"],
         },
     }

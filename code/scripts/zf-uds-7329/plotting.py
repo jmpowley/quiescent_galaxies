@@ -59,7 +59,8 @@ def subcorner(results, showpars=None, truths=None,
                 xx_truth[idx] = np.log10(xx_truth[idx])
 
     # -- scale corner plot to show percentiles of data
-    p_lo, p_hi = 2.5, 97.5
+    p_lo, p_hi = 5, 95
+    # p_lo, p_hi = 2.5, 97.5
     # p_lo, p_hi = 0, 100
     ranges = []
     for i in range(xx.shape[1]):

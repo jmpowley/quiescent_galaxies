@@ -12,10 +12,11 @@ def convert_zred_to_agebins(zred=None, nbins_sfh=None, **extras):
         # TODO: Add cosmology as kwarg
 
         cosmo = cosmology.FlatLambdaCDM(H0=67.4, Om0=0.315, Tcmb0=2.726)
+        zmax = 20
 
         tuniv = np.squeeze(cosmo.age(zred).to("yr").value)
         ncomp = np.squeeze(nbins_sfh)
-        tbinmax = np.squeeze(cosmo.age(z=20).to("yr").value)
+        tbinmax = np.squeeze(cosmo.age(zmax).to("yr").value)
         tbinmax = tuniv - tbinmax
         #agelims = [0.0, 7.4772] + np.linspace(8.0, np.log10(tbinmax), ncomp-1).tolist()
         logtmax = np.log10(2*10**9)

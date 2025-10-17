@@ -2,16 +2,19 @@ import numpy as np
 
 from dynesty.plotting import _quantile as weighted_quantile
 
-def return_sfh(results, theta, age_bins):
+def return_sfh(results, theta):
         """Returns the star formation history, or the  mass formed in each age bin, from the inputted theta values"""
 
-        # Extract parameters
-        model_params = results['model_params']  # all model parameters
-        param_names = getattr(results['chain'].dtype, "names", None)  # parameters in chain
+        # Extract variables from results
+        # -- parameters in chain
+        chain_names = getattr(results['chain'].dtype, "names", None)
+        # -- all model parameters
+        model_params = results['model_params']
+        age_bins = model_params['agebins']
+        nbins = np.squeeze(model_params['nbins_sfh'])
 
         # Create bins
-        nbins = np.squeeze(model_params['nbins_sfh'])
-        firstindex = param_names.index('logsfr_ratios')
+        firstindex = chain_names.index('logsfr_ratios')
         sfr_bins = []  # Normalised SFR bins (so s_0 = 1)
         ratio_bins = 10**theta[firstindex:firstindex+nbins-1]  # bins of SFR ratios
         
@@ -22,8 +25,8 @@ def return_sfh(results, theta, age_bins):
         sfr_bins = np.array(sfr_bins)
 
         # Calculate mass formed in each bins
-        log_mass = theta[param_names.index('logmass')]
-        zred = theta[param_names.index('zred')]
+        log_mass = theta[chain_names.index('logmass')]
+        zred = theta[chain_names.index('zred')]
         M_bin = sfr_bins * 10**log_mass / np.sum(delta_t * sfr_bins)
         M_bin = np.squeeze(M_bin).tolist()
         
@@ -40,12 +43,13 @@ def return_sfh_for_one_sigma_quantiles(sfh_chain, weights):
     
     return sfh_16, sfh_50, sfh_84
 
-def return_sfh_chain(results, age_bins):
+def return_sfh_chain(results):
     """ Return the chain of star formation histories from the `prospector` numeric/unstructured chain of model results
     """
 
-    # Extract numeric chain
+    # Extract variables from results
     numeric_chain = results["unstructured_chain"]
+    age_bins = results['model_params']['agebins']
 
     # Call return_sfh at each point on the chain
     sfh_chain = np.array([return_sfh(results, theta, age_bins)[0] for theta in numeric_chain])
