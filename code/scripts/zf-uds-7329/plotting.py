@@ -95,7 +95,7 @@ def call_subcorner(results, showpars, truths, color, fig_dir, fig_name, savefig=
 
     # Call subcorner to create plot
     cornerfig = subcorner(results, 
-                        showpars=showpars, 
+                        showpars=showpars,
                         start=0,
                         thin=1,
                         truths=truths,

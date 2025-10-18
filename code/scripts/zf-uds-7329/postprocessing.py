@@ -10,7 +10,7 @@ def return_sfh(results, theta):
         chain_names = getattr(results['chain'].dtype, "names", None)
         # -- all model parameters
         model_params = results['model_params']
-        age_bins = model_params['agebins']
+        agebins = model_params['agebins']
         nbins = np.squeeze(model_params['nbins_sfh'])
 
         # Create bins
@@ -19,7 +19,7 @@ def return_sfh(results, theta):
         ratio_bins = 10**theta[firstindex:firstindex+nbins-1]  # bins of SFR ratios
         
         # Calculate age bin widths (yr):
-        delta_t = np.array([10**(age_bin[1]) - 10**age_bin[0] for age_bin in age_bins])
+        delta_t = np.array([10**(age_bin[1]) - 10**age_bin[0] for age_bin in agebins])
         for i in range(0, nbins):
             sfr_bins.append((1. / np.prod(ratio_bins[:i])))
         sfr_bins = np.array(sfr_bins)
@@ -49,9 +49,8 @@ def return_sfh_chain(results):
 
     # Extract variables from results
     numeric_chain = results["unstructured_chain"]
-    age_bins = results['model_params']['agebins']
 
     # Call return_sfh at each point on the chain
-    sfh_chain = np.array([return_sfh(results, theta, age_bins)[0] for theta in numeric_chain])
+    sfh_chain = np.array([return_sfh(results, theta)[0] for theta in numeric_chain])
 
     return sfh_chain

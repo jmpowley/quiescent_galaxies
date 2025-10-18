@@ -19,10 +19,27 @@ from prospect.io import write_results as writer
 from loading import load_photometry_data, load_prism_data, load_grating_data
 from helpers import convert_zred_to_agebins, logmass_to_masses, convert_to_dust1
 
+# -----------------
+# Build noise model
+# -----------------
+
+
+# -----------------
+# Build noise model
+# -----------------
+def build_noise(noise_kwargs):
+
+    add_jitter = bool(noise_kwargs.get("add_jitter", False))
+    if add_jitter:
+        jitter = Uncorrelated(parnames=["spec_jitter"])
+        spec_noise = NoiseModelCov(kernels=[jitter], metric_name="unc", weight_by=["unc"])
+        return spec_noise
+    else:
+        return None
+
 # ------------------
 # Build observations
 # ------------------
-
 class PolySpectrum(PolyOptCal, Spectrum):
     pass
 
@@ -139,7 +156,8 @@ def build_model(model_kwargs):
     # Set zred to free
     model_params["zred"]["isfree"] = True
     model_params["zred"]["init"] = model_kwargs["zred"]
-    model_params["zred"]["prior"] = priors.TopHat(mini=3.0, maxi=3.4)
+    # model_params["zred"]["prior"] = priors.TopHat(mini=3.0, maxi=3.4)
+    model_params["zred"]["prior"] = priors.TopHat(mini=3.15, maxi=3.25)
 
     # Set IMF
     model_params["imf_type"]["init"] = 2  # Kroupa IMF
@@ -201,6 +219,10 @@ def build_model(model_kwargs):
     model_params["spec_jitter"] = dict(N=1, isfree=True, init=1.0, 
                                        prior=priors.TopHat(mini=0.5, maxi=5.0))
     
+    # Add nuiscance parameter
+    model_params["logmass"]["isfree"] = True
+    model_params["logmass"]["prior"] = priors.TopHat(mini=0, maxi=1)
+    
     # Build model
     model = SpecModel(model_params)
 
@@ -224,19 +246,6 @@ def build_sps(zcontinuous=1, **extras):
     sps = FastStepBasis(zcontinuous=zcontinuous, compute_vega_mags=False)
     
     return sps
-
-# -----------------
-# Build noise model
-# -----------------
-def build_noise(noise_kwargs):
-
-    add_jitter = bool(noise_kwargs.get("add_jitter", False))
-    if add_jitter:
-        jitter = Uncorrelated(parnames=["spec_jitter"])
-        spec_noise = NoiseModelCov(kernels=[jitter], metric_name="unc", weight_by=["unc"])
-        return spec_noise
-    else:
-        return None
 
 # ---------
 # Build all

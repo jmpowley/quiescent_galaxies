@@ -3,6 +3,7 @@ import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 
 import prospect.io.read_results as reader
 
@@ -56,8 +57,8 @@ def plot_obs_model_comparison(obs, pred):
     phot_wave_A = phot_obs.wavelength
     phot_wave_m = convert_wave_A_to_m(phot_wave_A)
     phot_wave_um = convert_wave_A_to_um(phot_wave_A)
-    # phot_filter_wave_A = [f.wavelength for f in phot_filters]
-    # phot_filter_trans = [f.transmission for f in phot_filters]
+    phot_filter_waves_um = [convert_wave_A_to_um(f.wavelength) for f in phot_filters]
+    phot_filter_trans = [f.transmission / f.transmission.max() for f in phot_filters]  # normalised transmission
     phot_obs_flux_maggie, phot_obs_err_maggie = phot_obs.flux, phot_obs.uncertainty
     phot_obs_flux_cgs, phot_obs_err_cgs = convert_flux_maggie_to_cgs(phot_obs_flux_maggie, phot_obs_err_maggie, phot_wave_m, cgs_factor=1e-19)
     # -- prism
@@ -68,13 +69,20 @@ def plot_obs_model_comparison(obs, pred):
     prism_obs_flux_cgs, prism_obs_err_cgs = convert_flux_maggie_to_cgs(prism_obs_flux_maggie, prism_obs_err_maggie, prism_wave_m, cgs_factor=1e-19)
 
     # Convert predicted data to plot
-    # -- phot
+    # -- photometry
     phot_pred_flux_cgs, _ = convert_flux_maggie_to_cgs(phot_pred_flux_maggie, err_maggie=np.nan, wave_m=phot_wave_m, cgs_factor=1e-19)
     # -- prism
     prism_pred_flux_cgs, _ = convert_flux_maggie_to_cgs(prism_pred_flux_maggie, err_maggie=np.nan, wave_m=prism_wave_m, cgs_factor=1e-19)
 
     # Create figure
-    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12, 6))
+    fig = plt.figure(figsize=(12, 7))
+    gs = GridSpec(2, 1, height_ratios=[5, 2], hspace=0)
+    ax = fig.add_subplot(gs[0])
+    ax_res = fig.add_subplot(gs[1], sharex=ax)
+
+    # fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12, 6))
+    # xmin, xmax = np.min(wphot)*0.8, np.max(wphot)/0.8
+    # ymin, ymax =fphot.min()*0.8, fphot.max()/0.4
 
     # Plot data and model predictions
     # -- photometry
@@ -88,11 +96,25 @@ def plot_obs_model_comparison(obs, pred):
                     color='black', alpha=0.25, label='Prism error')
     ax.plot(prism_wave_um, prism_pred_flux_cgs, color='blue', label='Prism fit')
 
+    # transmission curves
+    # for w, t in zip(phot_filter_waves_um, phot_filter_trans):
+        # t = 10**(0.2*(np.log10(ymax/ymin)))*t * ymin
+        # plot(w, t, lw=3, color='gray', alpha=0.7)
+
+    # -- residuals
+    ax_res.scatter(prism_wave_um, prism_obs_flux_cgs-prism_pred_flux_cgs, 
+                   color='blue', marker='.')
+    ax_res.scatter(phot_wave_um, phot_obs_flux_cgs-phot_pred_flux_cgs,
+                   color="orange", marker="D")
+
     # -- prettify
-    ax.set_xlabel(r'Observed Wavelength / $\mu$m')
-    ax.set_ylabel(r'Flux / $1~\times~10^{-19}$ erg s$^{-1}$ cm$^{-2}$ A$^{-1}$')
-    ax.legend()
+    ax.set_xlabel(r'Observed Wavelength / $\mu$m', size=18)
+    ax.set_ylabel(r'$f_\lambda~/~1~\times~10^{-19}$ erg s$^{-1}$ cm$^{-2}$ A$^{-1}$', size=18)
+    ax_res.set_ylabel(r'$\chi$', size=18)
+    ax.legend(loc="upper left", ncols=5, bbox_to_anchor=[0, 1.1], framealpha=0)
     plt.tight_layout()
+
+    return fig
 
 # Load results from output file
 out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329"
@@ -130,8 +152,13 @@ imax = np.argmax(lnprob)
 theta_best = numeric_chain[imax, :].copy()  # max of log probability
 theta_med = np.nanmedian(numeric_chain, axis=0)  # median of posteriors
 
+print(model_params.keys(), len(model_params))
+
+print(model.ndim)
+
 # Parameters to show in corner plot
-showpars=['zred', 'logmass', 'logzsol', 'logsfr_ratios', 'gas_logz', 'gas_logu', 'eline_sigma']
+showpars = ['zred', 'logmass', 'logzsol', 'logsfr_ratios', 'gas_logz', 'gas_logu', 'eline_sigma', 'dust_index', 'f_outlier_spec']
+# showpars = results['model_params']  # show all parameters
 
 # Extract SFHs
 age_bins = np.asarray(model_params['agebins'])
@@ -141,15 +168,15 @@ sfh_chain = return_sfh_chain(results)  # chain of SFR vectors (solar masses / ye
 # Predict model based on theta parameters
 pred, mass_frac = model.predict(theta=theta_best, observations=obs, sps=sps)
 
-plot_obs_model_comparison(obs, pred)
-
 # Make plots
 fig_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/zf-uds-7329"
 # -- corner plot
 fig_name = "zf-uds-7329_prospector_cornerplot.png"
-# call_subcorner(results, showpars, truths=theta_best, color="purple", fig_dir=fig_dir, fig_name=fig_name, savefig=True)
+call_subcorner(results, showpars, truths=theta_best, color="purple", fig_dir=fig_dir, fig_name=fig_name, savefig=True)
 # -- SFH plot
-# plot_sfh(age_bins, sfh_best, sfh_chain, weights, logscale=False)
+plot_sfh(age_bins, sfh_best, sfh_chain, weights, logscale=False)
+# -- data-model comparison
+plot_obs_model_comparison(obs, pred)
 
 show_plots = True
 if show_plots:
