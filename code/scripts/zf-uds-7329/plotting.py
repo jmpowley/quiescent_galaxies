@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 
 import corner
 
+from prospect.plotting.corner import allcorner
+
 # -------------------------------
 # Functions to plot model results
 # -------------------------------
@@ -50,13 +52,13 @@ def subcorner(results, showpars=None, truths=None,
         xx_truth = np.array(truths).copy()[..., ind_show]
     else:
         xx_truth = None
-    for p in logify:
-        if p in parnames:
-            idx = parnames.index(p)
-            xx[:, idx] = np.log10(xx[:, idx])
-            parnames[idx] = "log({})".format(parnames[idx])
-            if truths is not None:
-                xx_truth[idx] = np.log10(xx_truth[idx])
+    # for p in logify:
+    #     if p in parnames:
+    #         idx = parnames.index(p)
+    #         xx[:, idx] = np.log10(xx[:, idx])
+    #         parnames[idx] = "log({})".format(parnames[idx])
+    #         if truths is not None:
+    #             xx_truth[idx] = np.log10(xx_truth[idx])
 
     # -- scale corner plot to show percentiles of data
     p_lo, p_hi = 5, 95
@@ -84,7 +86,7 @@ def subcorner(results, showpars=None, truths=None,
 
     return fig
 
-def call_subcorner(results, showpars, truths, color, fig_dir, fig_name, savefig=True):
+def call_subcorner(results, showpars, truths, color, fig_dir, fig_name, savefig):
     """ Very small wrapper around modified `subcorner` function in `propsect.io.read_results`
     """
 
@@ -108,3 +110,31 @@ def call_subcorner(results, showpars, truths, color, fig_dir, fig_name, savefig=
         cornerfig.savefig(os.path.join(fig_dir, fig_name), dpi=400)
 
     return cornerfig
+
+def call_allcorner(samples, labels, weights, fig_dir, fig_name, savefig=True, **kwargs):
+
+    ndim = samples.shape[0]
+    assert len(labels) == ndim, (
+        f"`labels` (len = {len(labels)}) must match number of model dimensions in `samples` "
+        f"(ndim = {ndim})"
+    )
+
+    # Create figure with correct shape
+    fig, axes = plt.subplots(ndim, ndim, figsize=(2*ndim, 2*ndim))
+    
+    # Call allcorner
+    axes = allcorner(
+        samples,
+        labels=labels,
+        axes=axes,
+        weights=weights,
+        **kwargs
+    )
+    # -- extra prettifying
+    plt.tight_layout()
+
+    # Save figure
+    if savefig:
+        fig.savefig(os.path.join(fig_dir, fig_name), dpi=300)
+
+    return fig

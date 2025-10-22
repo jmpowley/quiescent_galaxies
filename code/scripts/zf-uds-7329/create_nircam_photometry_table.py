@@ -7,7 +7,7 @@ import os
 jwst_filter_names = np.array(['f115w', 'f150w', 'f200w', 'f277w', 'f356w', 'f410m', 'f444w'])
 
 # Pivot wavelengths in microns
-jwst_filter_pivots = np.array([1.154, 1.501, 1.988, 2.776, 3.565, 4.083, 4.402])
+jwst_filter_waveffs = np.array([1.154, 1.501, 1.988, 2.776, 3.565, 4.083, 4.402])
 
 # Photometry data used by Turner et al. (2025)
 flux = np.array([25.567, 24.299, 22.826, 22.154, 21.827, 21.616, 21.546])
@@ -33,7 +33,7 @@ valid = np.full_like(flux, 1).astype(np.uint8)  # 1 is true
 # Build the table
 tb = QTable()
 tb['FILTER'] = jwst_filter_names
-tb['PIVOT'] = jwst_filter_pivots * u.um
+tb['WAVEFF'] = jwst_filter_waveffs * u.um
 tb['DATA'] = flux * u.mag
 tb['ERR'] = err * u.mag
 tb['VALID'] = valid

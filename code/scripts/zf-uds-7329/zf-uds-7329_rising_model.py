@@ -65,7 +65,7 @@ def convert_to_dust1(dust1_fraction=None, dust1=None, dust2=None, **extras):
         """Convert second component of dust model to first component based on fitted fraction of second dust model
         """
 
-        dust1 = dust1_fraction * dust2
+        dust1 = dust1_fraction*dust2
         
         return dust1
 
@@ -88,7 +88,7 @@ def build_noise(noise_kwargs):
 class PolySpectrum(PolyOptCal, Spectrum):
     pass
 
-def build_obs(obs_params, noise=None, **extras):
+def build_obs(obs_params, noise=None):
     """Build a set of Prospector observations using the `Prospector.prospect.observation.Observation` class
 
     Parameters
@@ -158,7 +158,7 @@ def build_obs(obs_params, noise=None, **extras):
     grat3_polyspec.rectify()
     # -- complile observations
     # obs = [phot, prism_spec, grat1_spec, grat2_spec, grat3_spec]
-    obs = [phot, prism_polyspec, grat1_polyspec, grat2_polyspec, grat3_polyspec]  # polynomial spectral calibration
+    obs = [phot, prism_polyspec, grat1_polyspec, grat2_polyspec, grat3_polyspec]  # polynomial spectral calibration (or prior in model)
 
     return obs
 
@@ -181,6 +181,7 @@ def build_model(model_kwargs):
 
     # Load kwargs
     add_nebular = model_kwargs["add_nebular"]
+    # cosmo = model_kwargs["cosmology"]
     
     # Continuity SFH
     model_params = TemplateLibrary["continuity_sfh"]
@@ -194,7 +195,7 @@ def build_model(model_kwargs):
         model_params["gas_logz"]["isfree"] = True
         # -- adjust for widths of emission lines
         model_params["nebemlineinspec"]["init"] = True
-        model_params["eline_sigma"] = dict(N=1, isfree=True, init=100.0, units="km/s",
+        model_params["eline_sigma"] = dict(N=1, isfree=True, init=100.0, units="km/s", 
                                            prior=priors.TopHat(mini=30, maxi=550))
         
     # Set zred to free
@@ -294,10 +295,10 @@ def build_sps(zcontinuous=1, **extras):
 # ---------
 # Build all
 # ---------
-def build_all(obs_kwargs, model_kwargs, noise_kwargs, **extras):
+def build_all(obs_params, model_kwargs, noise_kwargs):
 
     noise = build_noise(noise_kwargs)
-    obs = build_obs(obs_kwargs, noise=noise)
+    obs = build_obs(obs_params, noise=noise)
     model = build_model(model_kwargs)
     sps = build_sps()
 
@@ -308,15 +309,22 @@ def build_all(obs_kwargs, model_kwargs, noise_kwargs, **extras):
 # -------------
 def main():
 
-    obs_kwargs = {
+    fit_obs = {
+        "phot" : True,
+        "prism" : True,
+        "grating1" : False,
+        "grating2" : False,
+        "grating3" : False,
+    }
+
+    obs_params = {
 
          "phot_params" : {
             "phot_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/photometry",
             "name" : "zf-uds-7329",
             "flux_units" : "maggie",
             "snr_limit" : 20,
-            "return_none" : False,
-            "fit_obs" : True,
+            "return_none" : not fit_obs["phot"],
         },
 
         "prism_params" : {
@@ -326,10 +334,9 @@ def main():
             "extra_nod" : "extr5",
             "wave_units" : "A",
             "flux_units" : "maggie",
-            "rescale_factor" : 1.86422,
+            "rescale_factor" : 1.86422,  # uniform scaling factor to match photometry/Glazebrook's spectrum
             "snr_limit" : 20,
-            "return_none" : False,
-            "fit_obs" : True,
+            "return_none" : not fit_obs["prism"],
         },
 
         "grat1_params" : {
@@ -339,10 +346,9 @@ def main():
              "filter" : "f100lp",
              "wave_units" : "A",
              "flux_units" : "maggie",
-             "rescale_factor" : 1.86422,
+             "rescale_factor" : 1.86422,  # uniform scaling factor to match photometry/Glazebrook's spectrum
              "snr_limit" : 20,
-             "return_none" : True,
-             "fit_obs" : False,
+             "return_none" : not fit_obs["grating1"],
         },
 
         "grat2_params" : {
@@ -352,10 +358,9 @@ def main():
              "filter" : "f170lp",
              "wave_units" : "A",
              "flux_units" : "maggie",
-             "rescale_factor" : 1.86422,
+             "rescale_factor" : 1.86422,  # uniform scaling factor to match photometry/Glazebrook's spectrum
              "snr_limit" : 20,
-             "return_none" : False,
-             "fit_obs" : True,
+             "return_none" : not fit_obs["grating2"],
         },
 
         "grat3_params" : {
@@ -365,38 +370,31 @@ def main():
              "filter" : "f290lp",
              "wave_units" : "A",
              "flux_units" : "maggie",
-             "rescale_factor" : 1.86422,
+             "rescale_factor" : 1.86422,  # uniform scaling factor to match photometry/Glazebrook's spectrum
              "snr_limit" : 20,
-             "return_none" : True,
-             "fit_obs" : False
+             "return_none" : not fit_obs["grating3"],
         },
     }
 
     model_kwargs = {
         "zred" : 3.19,
-        "add_nebular" : False,
+        "add_nebular" : True,
         # "cosmology" : cosmology.FlatLambdaCDM(H0=67.4, Om0=0.315, Tcmb0=2.726),
         }
 
     noise_kwargs = {
         "add_jitter" : True
         }
-    
-    # Store all dicts in run_params
-    run_params = {}
-    run_params["obs_kwargs"] = obs_kwargs
-    run_params["model_kwargs"] = model_kwargs
-    run_params["noise_kwargs"] = noise_kwargs
 
     # Load all
-    obs, model, sps = build_all(**run_params)
+    obs, model, sps = build_all(obs_params, model_kwargs, noise_kwargs)
 
     print("obs:", obs)
-    print("model:", model)
+    print("model", model)
     print("sps:", sps)
 
-    # Add extra run kwargs
-    # TODO: Change to add these from the command line
+    # Run kwargs
+    run_params = {}
     # -- general kwargs
     run_params["param_file"] = __file__
     # -- select method
@@ -413,45 +411,24 @@ def main():
     # -- dynesty kwargs
     # -- nautilus kwargs
     run_params["verbose"] = True
-    run_params["n_live"] = 1000  # TODO: change to take as CL argument
-    run_params["discard_exploration"] = True
 
-    # Map obs list to explicit names
-    expected_names = obs_kwargs.keys()
-    obs_map = dict(zip(expected_names, obs))
+    # Select observations
+    new_obs = [o for o, k in zip(obs, fit_obs.keys()) if fit_obs.get(k, True)]
 
-    # Compose new_obs list: include only if corresponding params 'return_none' is False
-    new_obs = []
-    for key in obs_kwargs.keys():
-        if not obs_kwargs[key].get("return_none", True) and obs_kwargs[key].get("fit_data", True):
-            new_obs.append(obs_map[key])
+    print("new_obs:", new_obs)
 
     # Fit model
+    print("Starting fit...")
     start = time()
+    # output = fit_model(spec_obs, model, sps, lnprobfn=lnprobfn, **run_params)
     output = fit_model(new_obs, model, sps, lnprobfn=lnprobfn, **run_params)
     end = time()
     print(output)
     print(f"Model fit in {end - start:.2f} seconds")
 
-    # Build descriptive output strings
-    # -- obs_str e.g. 'phot_prism_g235m'
-    obs_str_list = []
-    for key in obs_kwargs.keys():
-        if not obs_kwargs[key].get("return_none", True) and obs_kwargs[key].get("fit_data", True):
-            
-            if key.startswith("grat"):
-                grating_name = obs_kwargs[key].get("grating")
-                obs_str_list.append(grating_name)
-            else:
-                obs_name = key.strip("_params")
-                obs_str_list.append(obs_name)
-        obs_str = "_".join(obs_str_list) or "none"
-    # -- other key info
-    neb_str = "T" if model_kwargs["add_nebular"] else "F"
-
     # Save results
-    out_name = f"zf-uds-7329_flat_model_nautlius_{obs_str}_neb{neb_str}.h5"
     out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329"
+    out_name = "zf-uds-7329_rising_model_nautilus_phot_prism.h5"
     out_path = os.path.join(out_dir, out_name)
     writer.write_hdf5(out_path, run_params, model, new_obs,
                         sampling_result=output["sampling"], 

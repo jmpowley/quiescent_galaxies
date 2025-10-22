@@ -131,14 +131,14 @@ for i, spec_name in enumerate(spec_names):
     # Load data
     # -- prism
     if spec_name == 'prism':
-        wave_um, flux_ujy, err_ujy, mask = load_prism_data(spec_dir, name, version=3.1, extra_nod='extr5', wave_units='um', flux_units='ujy', return_none=False)
+        wave_um, flux_ujy, err_ujy, mask = load_prism_data(spec_dir, name, version=3.1, nod='extr5', wave_units='um', flux_units='ujy', return_none=False)
         flux_jy, err_jy = convert_flux_ujy_to_jy(flux_ujy, err_ujy)
         wave_m = convert_wave_um_to_m(wave_um)
         flux_cgs, err_cgs = convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
     # -- grating
     else:
         grat, filt = spec_name.split('-')
-        wave_um, flux_ujy, err_ujy, mask = load_grating_data(spec_dir, name, grating=grat, filter=filt, wave_units='um', flux_units='ujy', return_none=False)
+        wave_um, flux_ujy, err_ujy, mask = load_grating_data(spec_dir, name, grating=grat, filter=filt, in_wave_units='um', flux_units='ujy', return_none=False)
         flux_jy, err_jy = convert_flux_ujy_to_jy(flux_ujy, err_ujy)
         wave_m = convert_wave_um_to_m(wave_um)
         flux_cgs, err_cgs = convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)

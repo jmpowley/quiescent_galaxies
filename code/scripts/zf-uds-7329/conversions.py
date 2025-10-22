@@ -222,16 +222,36 @@ def convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1.0, return_quant
     flux_cgs = flux_jy.to(flux_unit, equivalencies=u.spectral_density(wave_m))
     err_cgs = err_jy.to(flux_unit, equivalencies=u.spectral_density(wave_m))
 
-    # # Optionally return quantity and unit
-    # if return_unit:
-    #     if return_quantity:
-    #         return flux_cgs, err_cgs, flux_unit
-    #     else:
-    #         return flux_cgs.value, err_cgs.value, flux_unit
-    # else:
-    #     return flux_cgs, err_cgs if return_quantity else flux_cgs.value, err_cgs.value
-    
-    # Optionally return quantity and unit
+    if return_unit:
+        if return_quantity:
+            return flux_cgs, err_cgs, flux_unit
+        else:
+            return flux_cgs.value, err_cgs.value, flux_unit
+    else:
+        if return_quantity:
+            return flux_cgs, err_cgs
+        else:
+            return flux_cgs.value, err_cgs.value
+
+def convert_flux_si_to_cgs(flux_si, err_si, cgs_factor, return_quantity=False, return_unit=False):
+    """Convert flux values from janksies to cgs units
+
+    Optionally, supply `cgs_factor` to scale orders of magnitude or return result as `astropy.units.quantity.Quantity` object
+    """
+
+    # Assign units
+    if not isinstance(flux_si, u.Quantity):
+        flux_si = flux_si * u.Unit('W / m3')
+    if not isinstance(err_si, u.Quantity):
+        err_si = err_si * u.Unit('W / m3')
+
+    # convert to cgs units
+    flux_unit = u.erg/(u.s * u.cm**2 * u.AA) * cgs_factor
+    # flux_cgs = flux_si * 1e-7
+    # err_cgs = err_si* 1e-7
+    flux_cgs = flux_si.to(flux_unit)
+    err_cgs = err_si.to(flux_unit)
+
     if return_unit:
         if return_quantity:
             return flux_cgs, err_cgs, flux_unit

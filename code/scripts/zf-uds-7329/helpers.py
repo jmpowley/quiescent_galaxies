@@ -2,14 +2,11 @@ import numpy as np
 
 from astropy import cosmology
 
-# ----------------------------
-# Functions for building model
-# ----------------------------
 def convert_zred_to_agebins(zred=None, nbins_sfh=None, **extras):
         """ Returns age bins going [0, 10Myr, 30Myr, 100Myr, ...] and nbin-2 equally spaced (in logtime) bins from 100Myr to age_universe
         """
 
-        # TODO: Add cosmology as kwarg
+        from astropy import cosmology
 
         cosmo = cosmology.FlatLambdaCDM(H0=67.4, Om0=0.315, Tcmb0=2.726)
         zmax = 20
