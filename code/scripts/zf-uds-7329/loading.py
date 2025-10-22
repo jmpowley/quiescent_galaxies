@@ -14,6 +14,47 @@ from preprocessing import apply_snr_limit, apply_rescaling_factor
 # Functions to load data
 # ----------------------
 def load_photometry_data(phot_dir, name, data_ext, mask_ext, in_flux_units, out_flux_units, snr_limit, return_none=False, return_quantities=False, return_units=False, **extras):
+    """Function to load JWST NIRCam photometry from a FITS table
+
+    Path to the FITS file is built as the following:
+        /path/to/directory/[name]_nircam_photometry.fits
+
+    Parameters
+    ----------
+    phot_dir : str
+        Directory containing the photometry FITS file.
+    name : str
+        Name of the object at the start of the file name.
+    data_ext : str
+        Column name in the photometry table that contains the flux values.
+    mask_ext : str
+        Column name in the photometry table that contains the mask values. Set to Boolean array of True values if None.
+    in_flux_units : str
+        Shorthand units of the input flux data (e.g. 'magnitude').
+    out_flux_units : str
+        Shorthand units of the desired output flux and error data (e.g. 'ujy', 'maggie', 'cgs').
+    snr_limit : float
+        Maximum signal-to-noise ratio in the output flux data. Performed by calculating the new error as flux / snr_limit. Applies basic check for NaN values and positive error values.
+    return_none : bool
+        Returns None for all outputs if True. Useful if you want to toggle whether an observation is to be fit in Prospector.
+    return_quantities : bool
+        *CURRENTLY NOT IMPLEMENTED* Returns flux outputs as `astropy.units.Quantity` objects.
+    return_units : bool
+        *CURRENTLY NOT IMPLEMENTED* Returns numerical flux outputs plus associated astropy units as extra outputs.
+    **extras
+        Additional keyword arguments are accepted but ignored.
+
+    Returns
+    -------
+    sedpy_filters : list
+        List of sedpy filter objects loaded via `sedpy.observate.load_filters`. JWST filter names are constructed as `jwst_<FILTER>` from the table FILTER column.
+    flux_out : np.ndarray
+        Output flux values converted to `out_flux_units`. Returned as a NumPy array.
+    err_out : np.ndarray
+        Output flux errors converted to `out_flux_units`. Returned as a NumPy array.
+    mask_out : np.ndarray
+        Boolean mask for each photometric point. Returned as a NumPy boolean array.
+    """
 
     if return_none:
         return None, None, None, None
@@ -28,7 +69,7 @@ def load_photometry_data(phot_dir, name, data_ext, mask_ext, in_flux_units, out_
     wave_in = phot_tb["WAVEFF"].data
     flux_in = phot_tb[data_ext].data
     err_in = phot_tb["ERR"].data
-    mask = phot_tb[mask_ext].data.astype(bool)
+    mask_in = phot_tb[mask_ext].data.astype(bool)
 
     # Load JWST filters
     jwst_filters = ([f"jwst_{filt}" for filt in filters])
@@ -52,15 +93,71 @@ def load_photometry_data(phot_dir, name, data_ext, mask_ext, in_flux_units, out_
     else:
         flux_out, err_out = None, None
 
-    # print(flux_out)
-
     # Apply noise floor
     if snr_limit is not None:
         flux_out, err_out = apply_snr_limit(flux_out, err_out, snr_limit)
 
-    return sedpy_filters, flux_out, err_out, mask
+    # TODO: Apply custom masking routine
+    mask_out = mask_in
+
+    # Explicitly make NumPy arrays
+    flux_out = np.asarray(flux_out)
+    err_out = np.asarray(err_out)
+
+    return sedpy_filters, flux_out, err_out, mask_out
 
 def load_prism_data(prism_dir, name, version, nod, data_ext, mask_ext, in_wave_units, out_wave_units, in_flux_units, out_flux_units, rescale_factor, snr_limit, return_none=False, return_quantities=False, return_units=False, **extras):
+    """Function to load JWST NIRSpec/Prism data from a FITS file
+
+    Path to the FITS file is built as the following:
+        /path/to/directory/[name]_prism_clear[_version][_nod][_dim].fits
+
+    Parameters
+    ----------
+    prism_dir : str
+        Directory of prism spectrum FITS files.
+    name : str
+        Name of the object at the start of the file name.
+    version : str
+        Version of the spectrum information in the file name. Can be set to None if no version.
+    nod : str
+        Nodding pattern information in the file name. Can be set to None if no nodding.
+    data_ext : str
+        Name of the FITS extension that contains the flux data. Set to 'DATA' if None.
+    mask_ext : str
+        Name of the FITS extension that contains the mask data. Set to a Boolean array of True values if None.
+    in_wave_units : str
+        Shorthand units of the input wavelength data ('si' for metres, 'um' for microns).
+    out_wave_units : str
+        Shorthand units of the output wavelength data ('um' or 'A').
+    in_flux_units : str
+        Shorthand units of the input flux and error data ('si', 'ujy', ...).
+    out_flux_units : str
+        Shorthand units of the output flux and error data ('cgs', 'ujy', ...).
+    rescale_factor : float
+        Factor applied to uniformly rescale the spectrum and error. If None no rescaling is performed.
+    snr_limit : float
+        Maximum signal-to-noise ratio in the output flux data. Performed by calculating the new error as flux / snr_limit. Applies basic checks for NaN values and positive error values.
+    return_none : bool
+        Returns None for all outputs if True. Useful if you want to toggle whether an observation is to be fit in Prospector.
+    return_quantities : bool
+        *CURRENTLY NOT IMPLEMENTED* Returns wavelength/flux outputs as `astropy.units.Quantity` objects.
+    return_units : bool
+        *CURRENTLY NOT IMPLEMENTED* Returns numerical outputs plus associated astropy units as extra outputs.
+    **extras
+        Additional keyword arguments are accepted but ignored.
+
+    Returns
+    -------
+    wave_out : np.ndarray
+        Output wavelength data of the prism spectrum in the chosen units. Returned as a NumPy array.
+    flux_out : np.ndarray
+        Output flux data of the prism spectrum in the chosen units. Returned as a NumPy array.
+    err_out : np.ndarray
+        Output error data of the prism spectrum in the chosen units. Returned as a NumPy array.
+    mask_out : np.ndarray
+        Output mask data of the prism spectrum as a Boolean array. Returned as a NumPy boolean array.
+    """
 
     if return_none:
         return None, None, None, None
@@ -102,10 +199,10 @@ def load_prism_data(prism_dir, name, version, nod, data_ext, mask_ext, in_wave_u
     # -- mask
     if mask_ext is not None:
         mask_hdu = hdul[mask_ext]
-        mask = mask_hdu.data.astype(bool)
+        mask_in = mask_hdu.data.astype(bool)
     else:
-        mask = None
-        mask = np.full(flux_in.shape, True)  # TODO: add NaN (or like) mask
+        mask_in = None
+        mask_in = np.full(flux_in.shape, True)  # TODO: add NaN (or like) mask
 
     # Convert wavelength units
     # -- from SI
@@ -156,38 +253,73 @@ def load_prism_data(prism_dir, name, version, nod, data_ext, mask_ext, in_wave_u
     if snr_limit is not None:
         flux_out, err_out = apply_snr_limit(flux_out, err_out, snr_limit)
 
-    # Convert to desired units
-    # -- flux
-    # if in_flux_units == "si":
-    #     flux, err = flux_si, err_si
-    # elif flux_units == "jy":
-    #     flux_jy, err_jy = convert_flux_si_to_jy(wave_m, flux_si, err_si)
-    #     flux, err = flux_jy, err_jy
-    # elif flux_units == "ujy":
-    #     flux_jy, err_jy = convert_flux_si_to_jy(wave_m, flux_si, err_si)
-    #     flux_ujy, err_ujy = convert_flux_jy_to_ujy(flux_jy, err_jy)
-    #     flux, err = flux_ujy, err_ujy
-    # elif flux_units == "cgs":
-    #     flux_jy, err_jy = convert_flux_si_to_jy(wave_m, flux_si, err_si)
-    #     flux_cgs, err_cgs = convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
-    #     flux, err = flux_cgs, err_cgs
-    # elif flux_units == "maggie":
-    #     flux_jy, err_jy = convert_flux_si_to_jy(wave_m, flux_si, err_si)
-    #     flux_maggie, err_maggie = convert_flux_jy_to_maggie(flux_jy, err_jy)
-    #     flux, err = flux_maggie, err_maggie
-    # # -- wavelength
-    # if wave_units == 'um':
-    #     wave_um = convert_wave_m_to_um(wave_m)
-    #     wave = wave_um
-    # elif wave_units == 'A':
-    #     wave_A = convert_wave_m_to_A(wave_m)
-    #     wave = wave_A
-    # else:
-    #     pass
+    # TODO: Apply custom masking routine
+    mask_out = mask_in
 
-    return wave_out, flux_out, err_out, mask
+    # Explicitly make NumPy arrays
+    wave_out = np.asarray(wave_out)
+    flux_out = np.asarray(flux_out)
+    err_out = np.asarray(err_out)
+    mask_out = np.asarray(mask_out)
+
+    return wave_out, flux_out, err_out, mask_out
 
 def load_grating_data(grating_dir, name, grating, filter, version, nod, data_ext, mask_ext, in_wave_units, out_wave_units, in_flux_units, out_flux_units, rescale_factor, snr_limit, return_none=False, return_quantities=False, return_units=False, **extras):
+    """Function to load JWST NIRSpec grating data from a FITS file
+
+    Path to the FITS file is built as the following:
+        /path/to/directory/[name]_[grating]_[filter][_version][_nod][_dim].fits
+
+    Parameters
+    ----------
+    grating_dir : str
+        Directory of the grating spectrum FITS files.
+    name : str
+        Name of the object at the start of the file name.
+    grating : str
+        Grating identifier (e.g. 'g140m', 'g235h').
+    filter : str
+        Filter identifier associated with the grating.
+    version : str
+        Version of the spectrum/reduction in the file name. Can be set to None if no version.
+    nod : str
+        Nodding pattern information in the file name. Can be set to None if no nodding.
+    data_ext : str
+        Name of the FITS extension that contains the flux data. Set to 'DATA' if None.
+    mask_ext : str
+        Name of the FITS extension that contains the mask data. Set to Boolean array of True values if None.
+    in_wave_units : str
+        Shorthand units of the input wavelength data ('si' for metres, 'um' for microns).
+    out_wave_units : str
+        Shorthand units of the output wavelength data ('um' or 'A').
+    in_flux_units : str
+        Shorthand units of the input flux and error data ('si', 'ujy', ...).
+    out_flux_units : str
+        Shorthand units of the output flux and error data ('cgs', 'ujy', ...).
+    rescale_factor : float
+        Factor applied to uniformly rescale the spectrum and error.
+    snr_limit : float
+        Maximum signal-to-noise ratio in the output flux data. Performed by calculating the new error as flux / snr_limit. Applies basic check for NaN values and positive error values.
+    return_none : bool
+        Returns None for all outputs if True. Useful if you want to toggle whether an observation is to be fit in Prospector.
+    return_quantities : bool
+        *CURRENTLY NOT IMPLEMENTED* Returns wavelength/flux outputs as `astropy.units.Quantity` objects.
+    return_units : bool
+        *CURRENTLY NOT IMPLEMENTED* Returns numerical outputs with associated astropy units as extra outputs.
+    **extras
+        Additional keyword arguments are accepted but ignored.
+
+    Returns
+    -------
+    wave_out : np.ndarray
+        Output wavelength data of the grating spectrum in the chosen units. Returned as a NumPy array.
+    flux_out : np.ndarray
+        Output flux data of the grating spectrum in the chosen units. Returned as a NumPy array.
+    err_out : np.ndarray
+        Output error data of the grating spectrum in the chosen units. Returned as a NumPy array.
+    mask_out : np.ndarray
+        Output mask data of the grating spectrum as a Boolean array. Returned as a NumPy boolean array.
+    """
 
     if return_none:
         return None, None, None, None
@@ -230,10 +362,10 @@ def load_grating_data(grating_dir, name, grating, filter, version, nod, data_ext
     # -- mask
     if mask_ext is not None:
         mask_hdu = hdul[mask_ext]
-        mask = mask_hdu.data.astype(bool)
+        mask_in = mask_hdu.data.astype(bool)
     else:
-        mask = None
-        mask = np.full(flux_in.shape, True)  # TODO: add NaN (or like) mask
+        mask_in = None
+        mask_in = np.full(flux_in.shape, True)  # TODO: add NaN (or like) mask
 
     # Convert wavelength units
     # -- from SI
@@ -284,4 +416,13 @@ def load_grating_data(grating_dir, name, grating, filter, version, nod, data_ext
     if snr_limit is not None:
         flux_out, err_out = apply_snr_limit(flux_out, err_out, snr_limit)
 
-    return wave_out, flux_out, err_out, mask
+    # TODO: Apply custom masking routine
+    mask_out = mask_in
+
+    # Explicitly make NumPy arrays
+    wave_out = np.asarray(wave_out)
+    flux_out = np.asarray(flux_out)
+    err_out = np.asarray(err_out)
+    mask_out = np.asarray(mask_out)
+
+    return wave_out, flux_out, err_out, mask_out
