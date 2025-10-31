@@ -18,6 +18,8 @@ from prospect.io import write_results as writer
 
 from loading import load_photometry_data, load_prism_data, load_grating_data, load_mask_data, load_dispersion_data
 
+from preprocessing import crop_bad_spectral_resolution
+
 # ----------------
 # Helper functions
 # ----------------
@@ -167,6 +169,20 @@ def build_obs(obs_kwargs, **extras):
     grat2_noise = build_noise(**obs_kwargs["grat2_kwargs"])
     grat3_noise = build_noise(**obs_kwargs["grat3_kwargs"])
 
+    # NOTE: Added in to fix library resolution issue. Considered (at least in part) temporary
+    # -- define prism mask for crop function
+    prism_mask = np.ones_like(prism_wave).astype(bool)
+    # -- apply crop to prism
+    prism_wave, prism_flux, prism_err, prism_mask, prism_res = crop_bad_spectral_resolution(prism_wave, 
+                                                                                            prism_flux, 
+                                                                                            prism_err,
+                                                                                            prism_mask,
+                                                                                            prism_res,
+                                                                                            zred=3.2,  # TODO: Change?
+                                                                                            wave_lo=2000,
+                                                                                            wave_hi=7000,
+                                                                                            )
+
     # Create Photometry and Spectrum classes
     # -- nircam photometry
     phot = Photometry(filters=phot_filters,
@@ -174,6 +190,7 @@ def build_obs(obs_kwargs, **extras):
                       uncertainty=phot_err,
                       mask=None,
                       noise=phot_noise,
+                      name=obs_kwargs["phot_kwargs"].get("prefix"),
                       )
     # -- prism spectrum
     # prism_spec = Spectrum(wavelength=prism_wave, flux=prism_flux, uncertainty=prism_err, mask=None)
@@ -184,6 +201,7 @@ def build_obs(obs_kwargs, **extras):
                                   noise=prism_noise,
                                   resolution=prism_res,
                                   polynomial_order=10,
+                                  name=obs_kwargs["prism_kwargs"].get("prefix"),
                                   )
     # -- medium-grating spectrum
     # grat1_spec = Spectrum(wavelength=grat1_wave, flux=grat1_flux, uncertainty=grat1_err, mask=None)
@@ -194,6 +212,7 @@ def build_obs(obs_kwargs, **extras):
                                   noise=grat1_noise,
                                   resolution=grat1_res,
                                   polynomial_order=10,
+                                  name=obs_kwargs["grat1_kwargs"].get("prefix"),
                                   )
     # grat2_spec = Spectrum(wavelength=grat2_wave, flux=grat2_flux, uncertainty=grat2_err, mask=None)
     grat2_polyspec = PolySpectrum(wavelength=grat2_wave,
@@ -203,6 +222,7 @@ def build_obs(obs_kwargs, **extras):
                                   noise=grat2_noise,
                                   resolution=grat2_res,
                                   polynomial_order=10,
+                                  name=obs_kwargs["grat2_kwargs"].get("prefix"),
                                   )
     # grat3_spec = Spectrum(wavelength=grat3_wave, flux=grat3_flux, uncertainty=grat3_err, mask=None)
     grat3_polyspec = PolySpectrum(wavelength=grat3_wave,
@@ -212,6 +232,7 @@ def build_obs(obs_kwargs, **extras):
                                   noise=grat3_noise,
                                   resolution=grat3_res,
                                   polynomial_order=10,
+                                  name=obs_kwargs["grat3_kwargs"].get("prefix"),
                                   )
 
     # Build obs from spectrum and photometry
@@ -354,6 +375,8 @@ def build_model(model_kwargs, obs_kwargs=None, **extras):
         model_params.update(TemplateLibrary["spectral_smoothing"])
         model_params["sigma_smooth"] = dict(N=1, isfree=True, init=300.0, units='km/s',
                                             prior= priors.TopHat(mini=10, maxi=1000))  # follow methodology of De Graff+25
+        model_params['smoothtype']['init'] = 'vel'
+        model_params['fftsmooth'] = {'N':1, 'isfree': False, 'init': True}
 
     # Add nuiscance parameter to test sampling
     # model_params["bob"]["isfree"] = True
@@ -583,11 +606,10 @@ def main():
             "out_flux_units" : "maggie",
             "rescale_factor" : 1.86422,
             "snr_limit" : 20,
-            "return_none" : False,
             "prefix" : "g235m",
             "add_jitter" : True,
             "include_outliers" : True,
-            "fit_obs" : True,
+            "fit_obs" : False,
         },
 
         "grat3_kwargs" : {

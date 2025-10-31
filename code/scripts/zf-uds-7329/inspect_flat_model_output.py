@@ -504,6 +504,9 @@ obs_order = [obs.rstrip('_kwargs') for obs in list(obs_kwargs.keys()) if obs_kwa
 # print(obs_order.index('prism'))
 # print(obs_order.index('grat2'))
 
+print("kind:", obs[0].kind)
+print("name:", obs[0].name)
+
 # Extract SFHs
 age_bins = np.asarray(model_params['agebins'])
 sfh_best, logmass_best = return_sfh(results, theta_best)
@@ -519,8 +522,6 @@ t_quench_16, t_quench_50, t_quench_84, t_quenchs = return_assembly_time_for_one_
 # Predict model based on theta parameters
 pred, mass_frac = model.predict(theta=theta_best, observations=obs, sps=sps)
 logmass_best_surv = np.log10(10**logmass_best * mass_frac)
-print("best mass:", logmass_best)
-print("best surviving mass:", logmass_best_surv)
 
 # Sample prior and posterior distributions
 nsample = 1e4
