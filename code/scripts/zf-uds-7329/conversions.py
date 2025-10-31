@@ -369,3 +369,32 @@ def convert_flux_maggie_to_cgs(flux_maggie, err_maggie, wave_m, cgs_factor, retu
             return flux_cgs, err_cgs
         else:
             return flux_cgs.value, err_cgs.value
+        
+def convert_flux_si_to_maggie(wave_m, flux_si, err_si, return_quantity=False, return_unit=False):
+
+    # Assign units
+    if not isinstance(wave_m, u.Quantity):
+        wave_m = wave_m * u.m
+    if not isinstance(flux_si, u.Quantity):
+        flux_si = flux_si * u.Unit('W / m3')
+    if not isinstance(err_si, u.Quantity):
+        err_si = err_si * u.Unit('W / m3')
+
+    # First convert si to jy
+    flux_jy, err_jy = convert_flux_si_to_jy(wave_m, flux_si, err_si, return_quantity=True)
+
+    # Convert jy to maggie
+    flux_unit = u.dimensionless_unscaled
+    flux_maggie, err_maggie = convert_flux_jy_to_maggie(flux_jy, err_jy, return_quantity=True)
+
+    # Optionally return quantity and unit
+    if return_unit:
+        if return_quantity:
+            return flux_maggie, err_maggie, flux_unit
+        else:
+            return flux_maggie.value, err_maggie.value, flux_unit
+    else:
+        if return_quantity:
+            return flux_maggie, err_maggie
+        else:
+            return flux_maggie.value, err_maggie.value
