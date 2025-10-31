@@ -2,8 +2,7 @@ import os
 
 import numpy as np
 import matplotlib.pyplot as plt
-
-import corner
+from matplotlib.ticker import ScalarFormatter
 
 from prospect.plotting.corner import allcorner
 
@@ -111,7 +110,7 @@ def call_subcorner(results, showpars, truths, color, fig_dir, fig_name, savefig)
 
     return cornerfig
 
-def call_allcorner(samples, labels, weights, fig_dir, fig_name, savefig=True, **kwargs):
+def call_allcorner(samples, labels, weights, fig_dir, fig_name, savefig=True, show_all_ticklabels=False, upper=False, **kwargs):
 
     ndim = samples.shape[0]
     assert len(labels) == ndim, (
@@ -130,6 +129,28 @@ def call_allcorner(samples, labels, weights, fig_dir, fig_name, savefig=True, **
         weights=weights,
         **kwargs
     )
+
+    # Enable tick labels and a sensible formatter for every visible subplot
+    if show_all_ticklabels:
+        for i in range(ndim):
+            for j in range(ndim):
+                ax = axes[i, j]
+
+                # skip suppressed triangles
+                if ((j < i) & upper) or ((j > i) & (not upper)):
+                    continue
+
+                # ensure major formatter will create labels
+                ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+                ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+
+                # turn on label drawing for both axes
+                ax.xaxis.set_tick_params(labelbottom=True, labeltop=False)
+                ax.yaxis.set_tick_params(labelleft=True, labelright=False)
+
+        # Redraw labels
+        fig.canvas.draw()
+
     # -- extra prettifying
     plt.tight_layout()
 

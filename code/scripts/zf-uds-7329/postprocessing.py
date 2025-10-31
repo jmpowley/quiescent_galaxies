@@ -1,6 +1,9 @@
 import numpy as np
 
-from dynesty.plotting import _quantile as weighted_quantile
+from dynesty.utils import quantile as weighted_quantile
+
+import astropy.units as u
+from astropy.cosmology import z_at_value
 
 import ast
 import importlib
@@ -69,17 +72,14 @@ def try_import(name):
 
 def load_build_model_from_string(source, func_name='build_model'):
     ns = {}  # namespace to exec into
-    # seed with extremely common safe modules if you want
-    # ns['np'] = importlib.import_module('numpy')  # optional pre-seed
     exec(source, ns)               # run whole file (top-level definitions placed into ns)
     if func_name not in ns:
         raise KeyError(f"{func_name} not defined after exec")
-    build_model = ns[func_name]
 
-    # attempt to call; if NameError occurs, detect missing names and try to inject them
-    def call_with_kwargs(kwargs):
+    # wrapper that forwards any args/kwargs to the loaded function
+    def call_with_kwargs(*args, **kwargs):
         try:
-            return build_model(kwargs)
+            return ns[func_name](*args, **kwargs)
         except NameError as e:
             # parse the function to find referenced globals
             missing_names = find_globals_in_function(source, func_name)
@@ -93,16 +93,22 @@ def load_build_model_from_string(source, func_name='build_model'):
                         ns[name] = obj
                         injected[name] = obj
                     except Exception as imp_e:
-                        # create a harmless default fallback for certain expected types
+                        # fallback behavior for TemplateLibrary (you can change to raising an error)
                         if name == 'TemplateLibrary':
                             ns[name] = {}
                             injected[name] = ns[name]
                         else:
-                            # cannot import or guess; raise informative error
                             raise ImportError(f"Could not import dependency '{name}': {imp_e}") from imp_e
-            # rebind build_model (its globals live in ns)
-            build_model_local = ns[func_name]
-            return build_model_local(kwargs)
+                else:
+                    # no mapping — you may want to raise or log
+                    raise ImportError(f"No import mapping for dependency '{name}'; add it to known_imports")
+
+            if injected:
+                print("Injected dependencies into namespace:", list(injected.keys()))  # optional debug
+
+            # Recall function with required globals
+            return ns[func_name](*args, **kwargs)
+
     return call_with_kwargs, ns
 
 def return_sfh(results, theta):
@@ -136,8 +142,7 @@ def return_sfh(results, theta):
         return M_bin, log_mass
 
 def return_sfh_for_one_sigma_quantiles(sfh_chain, weights):
-    """Returns the 16th, 50th and 84th quantile of a chain of star formation histories using the weights of the results
-    """
+    """Returns the 16th, 50th and 84th quantile of a chain of star formation histories using the weights of the results"""
     
     # Get the weighted quantiles of the SFH chain
     sfh_16, sfh_50, sfh_84 = np.squeeze(np.array([
@@ -147,8 +152,7 @@ def return_sfh_for_one_sigma_quantiles(sfh_chain, weights):
     return sfh_16, sfh_50, sfh_84
 
 def return_sfh_chain(results):
-    """ Return the chain of star formation histories from the `prospector` numeric/unstructured chain of model results
-    """
+    """ Return the chain of star formation histories from the `prospector` numeric/unstructured chain of model results"""
 
     # Extract variables from results
     numeric_chain = results["unstructured_chain"]
@@ -157,3 +161,91 @@ def return_sfh_chain(results):
     sfh_chain = np.array([return_sfh(results, theta)[0] for theta in numeric_chain])
 
     return sfh_chain
+
+def return_assembly_time(q, sfh, age_bins, log_mass=None, age_units=u.Gyr, return_quantity=False):
+    """Returns the time that specified fraction, q, of mass formed given a galaxies star formation history"""
+
+    # Define widths of each age bin (yr):
+    delta_t = np.array([10**(abin[1]) - 10**abin[0] for abin in age_bins])
+
+    # Calculate total mass formed
+    if log_mass is not None:
+        mass_tot = 10**log_mass
+    else:
+        mass_tot = np.sum(sfh*delta_t)
+    target = mass_tot * q  # target percentile of mass
+
+    # Calculate cumulative mass formed in each bin
+    mass_per_bin = sfh * delta_t
+    mass_cum = np.cumsum(mass_per_bin)
+
+    # Calculate index of percentile target
+    qindex = int(np.searchsorted(mass_cum, target, side='left'))
+    
+    # Subtract remaining time from target percentile bin's upper bound
+    excess = mass_cum[qindex] - mass_tot * q
+    q_time = (10**age_bins[qindex][1] - excess / sfh[qindex]) * u.yr
+
+    # Convert to age units specified by user 
+    if age_units is not None:
+        try:
+            q_time = q_time.to(age_units)
+        except Exception as e:
+            print(f"Error converting to units {age_units}: {e}")
+            print("Returning assembly time in years")
+
+    if return_quantity:
+        return q_time
+    else:
+        return q_time.value
+
+def return_assembly_time_for_one_sigma_quantities(q, sfh_chain, age_bins, weights, age_units=u.Gyr, return_distribution=False, return_quantity=False):
+
+    # Loop over each sfh chain
+    q_times = []
+    for sfh in sfh_chain:
+        # Convert assembly to value in the specified units
+        q_time = return_assembly_time(q=q, sfh=sfh, age_bins=age_bins, return_quantity=True)
+        if hasattr(q_time, 'to'):
+            q_val = q_time.to(age_units).value  # astropy Quantity
+        else:
+            q_val = q_time
+        q_times.append(q_val)
+    q_times = np.asarray(q_times)  # convert to array
+
+    # Compute weighted fractions
+    q_times_weighted = None  # TODO: Calculate weighted quantile
+
+    # Compute the weighted quantiles of the SFH chain
+    q_time_16 = np.squeeze(weighted_quantile(q_times, q=0.16, weights=weights))
+    q_time_50 = np.squeeze(weighted_quantile(q_times, q=0.50, weights=weights))
+    q_time_84 = np.squeeze(weighted_quantile(q_times, q=0.84, weights=weights))
+    
+    if return_distribution:
+        if return_quantity:
+            return q_time_16  * age_units, q_time_50 * age_units, q_time_84 * age_units, q_times * age_units
+        else:
+            return q_time_16, q_time_50, q_time_84, q_times
+    else:
+        return q_time_16, q_time_50, q_time_84
+
+def convert_lookback_at_redshift_to_z(delta_t, z_start, cosmo, time_unit=u.Gyr, return_quantity=False):
+
+    # Ensure delta_t is a quantity
+    if not hasattr(delta_t, 'unit'):
+        delta_t = delta_t * time_unit
+
+    # Make total loookback time
+    t_start = cosmo.lookback_time(z_start)
+    total_lookback = t_start + delta_t
+
+    print("total_lookback:", total_lookback)
+
+    # Convert to redshift
+    f = lambda z: cosmo.lookback_time(z)
+    z_targ = z_at_value(f, total_lookback)  # invert
+
+    if return_quantity:
+        return z_targ
+    else:
+        return z_targ.value
