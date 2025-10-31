@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -43,7 +42,7 @@ def _resolve_path(file_dir: str, file_name: str) -> Path:
     return Path(file_dir) / file_name
 
 
-def load_photometry_data(data_dir : Optional[str], data_name : Optional[str], data_ext : str, in_flux_units : str, out_flux_units : str, snr_limit : float, 
+def load_photometry_data(data_dir : str, data_name : str, data_ext : str, in_flux_units : str, out_flux_units : str, snr_limit : float, 
                          return_none : bool = False, return_quantities : bool = False, return_units : bool = False, **extras):
     """
     Load JWST NIRCam photometry from a FITS table and convert flux units.
