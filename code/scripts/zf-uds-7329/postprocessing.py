@@ -9,30 +9,30 @@ import ast
 import importlib
 from typing import Optional, Tuple, Dict, Any
 
-def extract_model_kwargs(source: str) -> Optional[str]:
-    """
-    Parse a Python source string and return model_kwargs as dict or None
-    """
-    tree = ast.parse(source)
+# def extract_model_kwargs(source: str) -> Optional[str]:
+#     """
+#     Parse a Python source string and return model_kwargs as dict or None
+#     """
+#     tree = ast.parse(source)
 
-    # Find all Assign nodes that target a Name 'model_kwargs'
-    model_nodes = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
-            for t in node.targets:
-                if isinstance(t, ast.Name) and t.id == "model_kwargs":
-                    model_nodes.append(node)
+#     # Find all Assign nodes that target a Name 'model_kwargs'
+#     model_nodes = []
+#     for node in ast.walk(tree):
+#         if isinstance(node, ast.Assign):
+#             for t in node.targets:
+#                 if isinstance(t, ast.Name) and t.id == "model_kwargs":
+#                     model_nodes.append(node)
 
-    # Try and evaluate model nodes to extract model_kwargs 
-    model_kwargs = None
-    if model_nodes:
-        node = model_nodes[-1]   # take last assignment if multiple
-        try:
-            model_kwargs = ast.literal_eval(node.value)
-        except Exception:
-            model_kwargs = None
+#     # Try and evaluate model nodes to extract model_kwargs 
+#     model_kwargs = None
+#     if model_nodes:
+#         node = model_nodes[-1]   # take last assignment if multiple
+#         try:
+#             model_kwargs = ast.literal_eval(node.value)
+#         except Exception:
+#             model_kwargs = None
 
-    return model_kwargs
+#     return model_kwargs
 
 def find_globals_in_function(source, func_name):
     tree = ast.parse(source)
@@ -135,7 +135,7 @@ def return_sfh(results, theta):
 
         # Calculate mass formed in each bins
         log_mass = theta[chain_names.index('logmass')]
-        zred = theta[chain_names.index('zred')]
+        # zred = theta[chain_names.index('zred')]
         M_bin = sfr_bins * 10**log_mass / np.sum(delta_t * sfr_bins)
         M_bin = np.squeeze(M_bin).tolist()
         
