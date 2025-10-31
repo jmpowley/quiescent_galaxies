@@ -1,75 +1,116 @@
-import os
+from pathlib import Path
+from typing import Optional
 
 import numpy as np
+from scipy.interpolate import interp1d
 
 from astropy.io import fits
 from astropy.table import Table
+from astropy import constants
 
 from sedpy.observate import load_filters
 
-from conversions import convert_wave_um_to_m, convert_wave_m_to_um, convert_wave_um_to_A, convert_wave_m_to_A, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_si_to_jy, convert_flux_magnitude_to_maggie, convert_flux_maggie_to_jy, convert_flux_si_to_cgs, convert_flux_si_to_jy, convert_flux_maggie_to_cgs
+import conversions
 from preprocessing import apply_snr_limit, apply_rescaling_factor
 
 # ----------------------
 # Functions to load data
 # ----------------------
-def load_photometry_data(phot_dir, name, data_ext, mask_ext, in_flux_units, out_flux_units, snr_limit, return_none=False, return_quantities=False, return_units=False, **extras):
-    """Function to load JWST NIRCam photometry from a FITS table
 
-    Path to the FITS file is built as the following:
-        /path/to/directory/[name]_nircam_photometry.fits
+def _resolve_path(file_dir: str, file_name: str) -> Path:
+    """
+    Construct a `pathlib.Path` from a directory and file name.
 
     Parameters
     ----------
-    phot_dir : str
+    file_dir : str
+        Directory containing the file. If `None`, a ValueError is raised.
+    file_name : str
+        File name (may include subdirectories or suffix).
+
+    Returns
+    -------
+    pathlib.Path
+        Path object pointing to `file_dir / file_name`.
+
+    Raises
+    ------
+    ValueError
+        If `file_dir` is `None`.
+    """
+    if file_dir is None:
+        raise ValueError("Either path or data_dir must be provided")
+    return Path(file_dir) / file_name
+
+
+def load_photometry_data(data_dir : Optional[str], data_name : Optional[str], data_ext : str, in_flux_units : str, out_flux_units : str, snr_limit : float, 
+                         return_none : bool = False, return_quantities : bool = False, return_units : bool = False, **extras):
+    """
+    Load JWST NIRCam photometry from a FITS table and convert flux units.
+
+    The FITS file path is constructed as ``Path(data_dir) / data_name`` and the table
+    is read with :class:`astropy.table.Table`.
+
+    Parameters
+    ----------
+    data_dir : str or None
         Directory containing the photometry FITS file.
-    name : str
-        Name of the object at the start of the file name.
+    data_name : str or None
+        FITS file name (including any suffix). If `None` a ValueError will be raised by
+        `_resolve_path`.
     data_ext : str
-        Column name in the photometry table that contains the flux values.
-    mask_ext : str
-        Column name in the photometry table that contains the mask values. Set to Boolean array of True values if None.
+        Column name in the photometry table that contains the flux values. If the
+        provided name is `None` the code falls back to the "DATA" column.
     in_flux_units : str
-        Shorthand units of the input flux data (e.g. 'magnitude').
+        Input flux units shorthand (e.g. ``'magnitude'``).
     out_flux_units : str
-        Shorthand units of the desired output flux and error data (e.g. 'ujy', 'maggie', 'cgs').
+        Desired output flux units shorthand (e.g. ``'ujy'``, ``'maggie'``, ``'cgs'``).
     snr_limit : float
-        Maximum signal-to-noise ratio in the output flux data. Performed by calculating the new error as flux / snr_limit. Applies basic check for NaN values and positive error values.
-    return_none : bool
-        Returns None for all outputs if True. Useful if you want to toggle whether an observation is to be fit in Prospector.
-    return_quantities : bool
-        *CURRENTLY NOT IMPLEMENTED* Returns flux outputs as `astropy.units.Quantity` objects.
-    return_units : bool
-        *CURRENTLY NOT IMPLEMENTED* Returns numerical flux outputs plus associated astropy units as extra outputs.
+        Maximum allowed signal-to-noise; if provided the function will call
+        :func:`apply_snr_limit` to enforce a noise floor.
+    return_none : bool, optional
+        If True, return ``(None, None, None)`` immediately. Default is False.
+    return_quantities : bool, optional
+        *Currently not implemented.* If True, would return :class:`astropy.units.Quantity`
+        arrays. Default is False.
+    return_units : bool, optional
+        *Currently not implemented.* If True, would return numerical arrays plus units.
+        Default is False.
     **extras
         Additional keyword arguments are accepted but ignored.
 
     Returns
     -------
     sedpy_filters : list
-        List of sedpy filter objects loaded via `sedpy.observate.load_filters`. JWST filter names are constructed as `jwst_<FILTER>` from the table FILTER column.
-    flux_out : np.ndarray
-        Output flux values converted to `out_flux_units`. Returned as a NumPy array.
-    err_out : np.ndarray
-        Output flux errors converted to `out_flux_units`. Returned as a NumPy array.
-    mask_out : np.ndarray
-        Boolean mask for each photometric point. Returned as a NumPy boolean array.
-    """
+        List of sedpy filter objects loaded via ``sedpy.observate.load_filters``. JWST
+        filter names are constructed as ``"jwst_<FILTER>"`` from the table FILTER column.
+    flux_out : numpy.ndarray
+        Flux values converted to ``out_flux_units``. Shape (N,) for N photometric points.
+    err_out : numpy.ndarray
+        Flux errors converted to ``out_flux_units``. Shape (N,).
 
+    Raises
+    ------
+    ValueError
+        If `out_flux_units` or `in_flux_units` are not recognised.
+    OSError / FileNotFoundError
+        If the FITS file does not exist or cannot be read by Astropy.
+    """
     if return_none:
-        return None, None, None, None
+        return None, None, None
 
     # Load table
-    phot_name = f"{name}_nircam_photometry.fits"
-    phot_path = os.path.join(phot_dir, phot_name)
-    phot_tb = Table.read(phot_path)
+    path = _resolve_path(data_dir, data_name)
+    tb = Table.read(path)
 
     # Access photometry data
-    filters = phot_tb["FILTER"].tolist()
-    wave_in = phot_tb["WAVEFF"].data
-    flux_in = phot_tb[data_ext].data
-    err_in = phot_tb["ERR"].data
-    mask_in = phot_tb[mask_ext].data.astype(bool)
+    filters = tb["FILTER"].tolist()
+    wave_in = tb["WAVEFF"].data
+    if data_ext is not None:
+        flux_in = tb[data_ext].data
+    else:
+        flux_in = tb["DATA"].data
+    err_in = tb["ERR"].data
 
     # Load JWST filters
     jwst_filters = ([f"jwst_{filt}" for filt in filters])
@@ -79,15 +120,15 @@ def load_photometry_data(phot_dir, name, data_ext, mask_ext, in_flux_units, out_
     # -- from magnitudes
     if in_flux_units == "magnitude":
         if out_flux_units == "maggie":
-            flux_out, err_out = convert_flux_magnitude_to_maggie(flux_in, err_in)
+            flux_out, err_out = conversions.convert_flux_magnitude_to_maggie(flux_in, err_in)
         elif out_flux_units == "ujy":
-            flux_maggie, err_maggie = convert_flux_magnitude_to_maggie(flux_in, err_in)
-            flux_jy, err_jy = convert_flux_maggie_to_jy(flux_maggie, err_maggie)
-            flux_out, err_out = convert_flux_jy_to_ujy(flux_jy, err_jy)
+            flux_maggie, err_maggie = conversions.convert_flux_magnitude_to_maggie(flux_in, err_in)
+            flux_jy, err_jy = conversions.convert_flux_maggie_to_jy(flux_maggie, err_maggie)
+            flux_out, err_out = conversions.convert_flux_jy_to_ujy(flux_jy, err_jy)
         elif out_flux_units == "cgs":
-            flux_maggie, err_maggie = convert_flux_magnitude_to_maggie(flux_in, err_in)
-            wave_m = convert_wave_um_to_m(wave_in)  # assumes wavelength given in microns
-            flux_out, err_out = convert_flux_maggie_to_cgs(flux_maggie, err_maggie, wave_m, cgs_factor=1e-19)
+            flux_maggie, err_maggie = conversions.convert_flux_magnitude_to_maggie(flux_in, err_in)
+            wave_m = conversions.convert_wave_um_to_m(wave_in)  # assumes wavelength given in microns
+            flux_out, err_out = conversions.convert_flux_maggie_to_cgs(flux_maggie, err_maggie, wave_m, cgs_factor=1e-19)
         else:
             raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
     else:
@@ -97,126 +138,98 @@ def load_photometry_data(phot_dir, name, data_ext, mask_ext, in_flux_units, out_
     if snr_limit is not None:
         flux_out, err_out = apply_snr_limit(flux_out, err_out, snr_limit)
 
-    # TODO: Apply custom masking routine
-    mask_out = mask_in
-
     # Explicitly make NumPy arrays
     flux_out = np.asarray(flux_out)
     err_out = np.asarray(err_out)
 
-    return sedpy_filters, flux_out, err_out, mask_out
+    return sedpy_filters, flux_out, err_out
 
-def load_prism_data(prism_dir, name, version, nod, data_ext, mask_ext, in_wave_units, out_wave_units, in_flux_units, out_flux_units, rescale_factor, snr_limit, return_none=False, return_quantities=False, return_units=False, **extras):
-    """Function to load JWST NIRSpec/Prism data from a FITS file
 
-    Path to the FITS file is built as the following:
-        /path/to/directory/[name]_prism_clear[_version][_nod][_dim].fits
+def load_prism_data(data_dir : str, data_name : str, data_ext : str, in_wave_units : str, out_wave_units : str, in_flux_units : str, out_flux_units : str, rescale_factor : float, snr_limit : float, 
+                    return_none : bool = False, return_quantities : bool = False, return_units : bool = False, **extras):
+    """
+    Load a JWST NIRSpec/Prism 1D spectrum from a FITS file and convert units.
+
+    The FITS path is built as ``Path(data_dir) / data_name``. The function expects the
+    FITS file to contain HDUs named "WAVELENGTH", "DATA" (or a custom `data_ext`), and "ERR".
 
     Parameters
     ----------
-    prism_dir : str
-        Directory of prism spectrum FITS files.
-    name : str
-        Name of the object at the start of the file name.
-    version : str
-        Version of the spectrum information in the file name. Can be set to None if no version.
-    nod : str
-        Nodding pattern information in the file name. Can be set to None if no nodding.
+    data_dir : str
+        Directory containing the prism FITS file.
+    data_name : str
+        FITS file name (including suffix).
     data_ext : str
-        Name of the FITS extension that contains the flux data. Set to 'DATA' if None.
-    mask_ext : str
-        Name of the FITS extension that contains the mask data. Set to a Boolean array of True values if None.
+        Name of the FITS extension that contains the flux data. If `None`, "DATA" is used.
     in_wave_units : str
-        Shorthand units of the input wavelength data ('si' for metres, 'um' for microns).
+        Shorthand for input wavelength units: ``'si'`` (metres) or ``'um'`` (microns).
     out_wave_units : str
-        Shorthand units of the output wavelength data ('um' or 'A').
+        Desired output wavelength units: e.g. ``'um'`` or ``'A'``.
     in_flux_units : str
-        Shorthand units of the input flux and error data ('si', 'ujy', ...).
+        Shorthand for input flux units (e.g. ``'si'``, ``'ujy'``).
     out_flux_units : str
-        Shorthand units of the output flux and error data ('cgs', 'ujy', ...).
+        Desired output flux units (e.g. ``'cgs'``, ``'maggie'``, ``'ujy'``).
     rescale_factor : float
-        Factor applied to uniformly rescale the spectrum and error. If None no rescaling is performed.
+        Multiplicative factor applied to flux and error (if not `None`).
     snr_limit : float
-        Maximum signal-to-noise ratio in the output flux data. Performed by calculating the new error as flux / snr_limit. Applies basic checks for NaN values and positive error values.
-    return_none : bool
-        Returns None for all outputs if True. Useful if you want to toggle whether an observation is to be fit in Prospector.
-    return_quantities : bool
-        *CURRENTLY NOT IMPLEMENTED* Returns wavelength/flux outputs as `astropy.units.Quantity` objects.
-    return_units : bool
-        *CURRENTLY NOT IMPLEMENTED* Returns numerical outputs plus associated astropy units as extra outputs.
+        Maximum allowed signal-to-noise; if provided the function will call
+        :func:`apply_snr_limit`.
+    return_none : bool, optional
+        If True, return ``(None, None, None)`` immediately. Default is False.
+    return_quantities : bool, optional
+        *Currently not implemented.* Default is False.
+    return_units : bool, optional
+        *Currently not implemented.* Default is False.
     **extras
         Additional keyword arguments are accepted but ignored.
 
     Returns
     -------
-    wave_out : np.ndarray
-        Output wavelength data of the prism spectrum in the chosen units. Returned as a NumPy array.
-    flux_out : np.ndarray
-        Output flux data of the prism spectrum in the chosen units. Returned as a NumPy array.
-    err_out : np.ndarray
-        Output error data of the prism spectrum in the chosen units. Returned as a NumPy array.
-    mask_out : np.ndarray
-        Output mask data of the prism spectrum as a Boolean array. Returned as a NumPy boolean array.
+    wave_out : numpy.ndarray
+        Wavelength array converted to `out_wave_units`. Shape (M,) for M spectral pixels.
+    flux_out : numpy.ndarray
+        Flux array converted to `out_flux_units`. Shape (M,).
+    err_out : numpy.ndarray
+        Error array converted to `out_flux_units`. Shape (M,).
+
+    Raises
+    ------
+    ValueError
+        If `in_wave_units`, `in_flux_units`, or output units are not recognised.
+    OSError / FileNotFoundError
+        If the FITS file cannot be opened.
     """
-
     if return_none:
-        return None, None, None, None
+        return None, None, None
 
-    # Customise
-    # -- version of spectra/reduction
-    if version is not None:
-        version_str = f"_{version}"
-    else:
-        version_str = ""
-    # -- nod
-    if nod is not None:
-        nod_str = f"_{nod}"
-    else:
-        nod_str = ""
-    # -- spectrum dimensions
-    dim_str = "_1D"
-    # -- combine
-    extra_str = version_str + nod_str + dim_str
-
-    # Load FITS file
-    spec_name = f"{name}_prism_clear{version_str}{nod_str}{dim_str}.fits"
-    spec_path = os.path.join(prism_dir, spec_name)
-    hdul = fits.open(spec_path)
+    # Load FITS file    
+    path = _resolve_path(data_dir, data_name)
+    hdul = fits.open(path)
 
     # Extract spectral data
     # -- wavelength
-    wave_hdu = hdul["WAVELENGTH"]
-    wave_in = wave_hdu.data
+    wave_in = hdul["WAVELENGTH"].data
     # -- flux
     if data_ext is not None:
-        flux_hdu = hdul[data_ext]
+        flux_in = hdul[data_ext].data
     else:    
-        flux_hdu = hdul["DATA"]
-    flux_in = flux_hdu.data
+        flux_in = hdul["DATA"].data
     # -- error
-    err_hdu = hdul["ERR"]
-    err_in = err_hdu.data
-    # -- mask
-    if mask_ext is not None:
-        mask_hdu = hdul[mask_ext]
-        mask_in = mask_hdu.data.astype(bool)
-    else:
-        mask_in = None
-        mask_in = np.full(flux_in.shape, True)  # TODO: add NaN (or like) mask
+    err_in = hdul["ERR"].data
 
     # Convert wavelength units
     # -- from SI
     if in_wave_units == "si":
         if out_wave_units == "um":
-            wave_out = convert_wave_m_to_um(wave_in)
+            wave_out = conversions.convert_wave_m_to_um(wave_in)
         elif out_wave_units == "A":
-            wave_out = convert_wave_m_to_A(wave_in)
+            wave_out = conversions.convert_wave_m_to_A(wave_in)
         else:
             raise ValueError(f'Output wave unit ({out_wave_units}) not recognised')
     # -- from microns
     elif in_wave_units == "um":
         if out_wave_units == "A":
-            wave_out = convert_wave_um_to_A(wave_in)
+            wave_out = conversions.convert_wave_um_to_A(wave_in)
         elif out_wave_units == "um":
             wave_out = wave_in
         else:
@@ -228,18 +241,30 @@ def load_prism_data(prism_dir, name, version, nod, data_ext, mask_ext, in_wave_u
     # -- from SI
     if in_flux_units == "si":
         if out_flux_units == "cgs":
-            flux_out, err_out = convert_flux_si_to_cgs(flux_in, err_in, cgs_factor=1e-19)
-        if out_flux_units == "ujy":
+            flux_out, err_out = conversions.convert_flux_si_to_cgs(flux_in, err_in, cgs_factor=1e-19)
+        elif out_flux_units == "ujy":
             wave_m = wave_in
-            flux_jy, err_jy = convert_flux_si_to_jy(wave_m, flux_in, err_in)
-            flux_out, err_out = convert_flux_jy_to_ujy(flux_jy, err_jy)
+            flux_jy, err_jy = conversions.convert_flux_si_to_jy(wave_m, flux_in, err_in)
+            flux_out, err_out = conversions.convert_flux_jy_to_ujy(flux_jy, err_jy)
+        elif out_flux_units == "maggie":
+            wave_m = wave_in
+            flux_out, err_out = conversions.convert_flux_si_to_maggie(wave_m, flux_in, err_in)
+        else:
+            raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
     # -- from uJy
     elif in_flux_units == "ujy":
         if out_flux_units == "cgs":
+            # -- convert wavelength to m for jy to cgs conversion
             if in_wave_units == "um":
-                wave_m = convert_wave_um_to_m(wave_in)
-            flux_jy, err_jy = convert_flux_ujy_to_jy(flux_in, err_in)
-            flux_out, err_out = convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
+                wave_m = conversions.convert_wave_um_to_m(wave_in)
+            elif in_wave_units == "A":
+                wave_m = conversions.convert_wave_A_to_m(wave_in)
+            elif in_wave_units == "m":
+                wave_m = wave_in
+            else:
+                raise ValueError("Input wave units are not 'm', 'um' or 'A' so cannot apply cgs conversion")
+            flux_jy, err_jy = conversions.convert_flux_ujy_to_jy(flux_in, err_in)
+            flux_out, err_out = conversions.convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
         else:
             raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
     else:
@@ -253,145 +278,117 @@ def load_prism_data(prism_dir, name, version, nod, data_ext, mask_ext, in_wave_u
     if snr_limit is not None:
         flux_out, err_out = apply_snr_limit(flux_out, err_out, snr_limit)
 
-    # TODO: Apply custom masking routine
-    mask_out = mask_in
-
     # Explicitly make NumPy arrays
     wave_out = np.asarray(wave_out)
     flux_out = np.asarray(flux_out)
     err_out = np.asarray(err_out)
-    mask_out = np.asarray(mask_out)
 
-    return wave_out, flux_out, err_out, mask_out
+    return wave_out, flux_out, err_out
 
-def load_grating_data(grating_dir, name, grating, filter, version, nod, data_ext, mask_ext, in_wave_units, out_wave_units, in_flux_units, out_flux_units, rescale_factor, snr_limit, return_none=False, return_quantities=False, return_units=False, **extras):
-    """Function to load JWST NIRSpec grating data from a FITS file
 
-    Path to the FITS file is built as the following:
-        /path/to/directory/[name]_[grating]_[filter][_version][_nod][_dim].fits
+def load_grating_data(data_dir : str, data_name : str, data_ext : str, in_wave_units : str, out_wave_units : str, in_flux_units : str, out_flux_units : str, rescale_factor : float, snr_limit : float, 
+                      return_none : bool = False, return_quantities : bool = False, return_units : bool = False, **extras):
+    """
+    Load a JWST NIRSpec grating 1D spectrum from a FITS file and convert units.
+
+    The FITS path is constructed as ``Path(data_dir) / data_name`` and the function
+    expects HDUs named "WAVELENGTH", "DATA" (or custom `data_ext`) and "ERR".
 
     Parameters
     ----------
-    grating_dir : str
-        Directory of the grating spectrum FITS files.
-    name : str
-        Name of the object at the start of the file name.
-    grating : str
-        Grating identifier (e.g. 'g140m', 'g235h').
-    filter : str
-        Filter identifier associated with the grating.
-    version : str
-        Version of the spectrum/reduction in the file name. Can be set to None if no version.
-    nod : str
-        Nodding pattern information in the file name. Can be set to None if no nodding.
+    data_dir : str
+        Directory containing the grating FITS file.
+    data_name : str
+        FITS file name (including suffix).
     data_ext : str
-        Name of the FITS extension that contains the flux data. Set to 'DATA' if None.
-    mask_ext : str
-        Name of the FITS extension that contains the mask data. Set to Boolean array of True values if None.
+        Name of the FITS extension that contains the flux data. If `None`, "DATA" is used.
     in_wave_units : str
-        Shorthand units of the input wavelength data ('si' for metres, 'um' for microns).
+        Shorthand for input wavelength units (``'si'`` or ``'um'``).
     out_wave_units : str
-        Shorthand units of the output wavelength data ('um' or 'A').
+        Desired output wavelength units (e.g. ``'A'`` or ``'um'``).
     in_flux_units : str
-        Shorthand units of the input flux and error data ('si', 'ujy', ...).
+        Shorthand for input flux units (e.g. ``'si'``, ``'ujy'``).
     out_flux_units : str
-        Shorthand units of the output flux and error data ('cgs', 'ujy', ...).
+        Desired output flux units (e.g. ``'cgs'``, ``'maggie'``, ``'ujy'``).
     rescale_factor : float
-        Factor applied to uniformly rescale the spectrum and error.
+        Multiplicative factor applied to flux and error (if not `None`).
     snr_limit : float
-        Maximum signal-to-noise ratio in the output flux data. Performed by calculating the new error as flux / snr_limit. Applies basic check for NaN values and positive error values.
-    return_none : bool
-        Returns None for all outputs if True. Useful if you want to toggle whether an observation is to be fit in Prospector.
-    return_quantities : bool
-        *CURRENTLY NOT IMPLEMENTED* Returns wavelength/flux outputs as `astropy.units.Quantity` objects.
-    return_units : bool
-        *CURRENTLY NOT IMPLEMENTED* Returns numerical outputs with associated astropy units as extra outputs.
+        Maximum allowed signal-to-noise; see :func:`apply_snr_limit`.
+    return_none : bool, optional
+        If True, return ``(None, None, None)`` immediately. Default is False.
+    return_quantities : bool, optional
+        *Currently not implemented.* Default is False.
+    return_units : bool, optional
+        *Currently not implemented.* Default is False.
     **extras
         Additional keyword arguments are accepted but ignored.
 
     Returns
     -------
-    wave_out : np.ndarray
-        Output wavelength data of the grating spectrum in the chosen units. Returned as a NumPy array.
-    flux_out : np.ndarray
-        Output flux data of the grating spectrum in the chosen units. Returned as a NumPy array.
-    err_out : np.ndarray
-        Output error data of the grating spectrum in the chosen units. Returned as a NumPy array.
-    mask_out : np.ndarray
-        Output mask data of the grating spectrum as a Boolean array. Returned as a NumPy boolean array.
+    wave_out : numpy.ndarray
+        Wavelength array converted to `out_wave_units`. Shape (M,).
+    flux_out : numpy.ndarray
+        Flux array converted to `out_flux_units`. Shape (M,).
+    err_out : numpy.ndarray
+        Error array converted to `out_flux_units`. Shape (M,).
+
+    Raises
+    ------
+    ValueError
+        If unknown input or output units are provided.
+    OSError / FileNotFoundError
+        If the FITS file cannot be opened.
     """
-
     if return_none:
-        return None, None, None, None
-    
-    # Customise
-    # -- version of spectra/reduction
-    if version is not None:
-        version_str = f"_{version}"
-    else:
-        version_str = ""
-    # -- nod
-    if nod is not None:
-        nod_str = f"_{nod}"
-    else:
-        nod_str = ""
-    # -- spectrum dimensions
-    dim_str = "_1D"
-    # -- combine
-    extra_str = version_str + nod_str + dim_str
+        return None, None, None
 
-    # Load FITS file
-    # spec_name = name + grating + filter + version_str + nod_str + dim_str
-    spec_name = f"{name}_{grating}_{filter}{version_str}{nod_str}{dim_str}.fits"
-    spec_path = os.path.join(grating_dir, spec_name)
-    hdul = fits.open(spec_path)
+    # Load FITS file    
+    path = _resolve_path(data_dir, data_name)
+    hdul = fits.open(path)
 
     # Extract spectral data
     # -- wavelength
-    wave_hdu = hdul["WAVELENGTH"]
-    wave_in = wave_hdu.data
+    wave_in = hdul["WAVELENGTH"].data
     # -- flux
     if data_ext is not None:
-        flux_hdu = hdul[data_ext]
+        flux_in = hdul[data_ext].data
     else:    
-        flux_hdu = hdul["DATA"]
-    flux_in = flux_hdu.data
+        flux_in = hdul["DATA"].data
     # -- error
-    err_hdu = hdul["ERR"]
-    err_in = err_hdu.data
-    # -- mask
-    if mask_ext is not None:
-        mask_hdu = hdul[mask_ext]
-        mask_in = mask_hdu.data.astype(bool)
-    else:
-        mask_in = None
-        mask_in = np.full(flux_in.shape, True)  # TODO: add NaN (or like) mask
+    err_in = hdul["ERR"].data
 
     # Convert wavelength units
     # -- from SI
     if in_wave_units == "si":
         if out_wave_units == "um":
-            wave_out = convert_wave_m_to_um(wave_in)
+            wave_out = conversions.convert_wave_m_to_um(wave_in)
         elif out_wave_units == "A":
-            wave_out = convert_wave_m_to_A(wave_in)
+            wave_out = conversions.convert_wave_m_to_A(wave_in)
         else:
             raise ValueError(f'Output wave unit ({out_wave_units}) not recognised')
     # -- from microns
     elif in_wave_units == "um":
         if out_wave_units == "A":
-            wave_out = convert_wave_um_to_A(wave_in)
+            wave_out = conversions.convert_wave_um_to_A(wave_in)
         elif out_wave_units == "um":
             wave_out = wave_in
         else:
             raise ValueError(f'Output wave unit ({out_wave_units}) not recognised')
     else:
-        raise ValueError(f'Input wave unit ({out_wave_units}) not recognised')
+        raise ValueError(f'Input wave unit ({in_wave_units}) not recognised')
     
     # Convert flux units
     # -- from SI
     if in_flux_units == "si":
         if out_flux_units == "cgs":
-            flux_out, err_out = convert_flux_si_to_cgs(flux_in, err_in, cgs_factor=1e-19)
+            flux_out, err_out = conversions.convert_flux_si_to_cgs(flux_in, err_in, cgs_factor=1e-19)
+        elif out_flux_units == "ujy":
+            wave_m = wave_in
+            flux_jy, err_jy = conversions.convert_flux_si_to_jy(wave_m, flux_in, err_in)
+            flux_out, err_out = conversions.convert_flux_jy_to_ujy(flux_jy, err_jy)
+        elif out_flux_units == "maggie":
+            wave_m = wave_in
+            flux_out, err_out = conversions.convert_flux_si_to_maggie(wave_m, flux_in, err_in)
         else:
             raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
     # -- from uJy
@@ -400,9 +397,12 @@ def load_grating_data(grating_dir, name, grating, filter, version, nod, data_ext
             flux_out, err_out = flux_in, err_in
         elif out_flux_units == "cgs":
             if in_wave_units == "um":
-                wave_m = convert_wave_um_to_m(wave_in)
-            flux_jy, err_jy = convert_flux_ujy_to_jy(flux_in, err_in)
-            flux_out, err_out = convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
+                wave_m = conversions.convert_wave_um_to_m(wave_in)
+            flux_jy, err_jy = conversions.convert_flux_ujy_to_jy(flux_in, err_in)
+            flux_out, err_out = conversions.convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
+        elif out_flux_units == "maggie":
+            flux_jy, err_jy = conversions.convert_flux_ujy_to_jy(flux_in, err_in)
+            flux_out, err_out = conversions.convert_flux_jy_to_maggie(flux_jy, err_jy)
         else:
             raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
     else:
@@ -416,13 +416,125 @@ def load_grating_data(grating_dir, name, grating, filter, version, nod, data_ext
     if snr_limit is not None:
         flux_out, err_out = apply_snr_limit(flux_out, err_out, snr_limit)
 
-    # TODO: Apply custom masking routine
-    mask_out = mask_in
-
     # Explicitly make NumPy arrays
     wave_out = np.asarray(wave_out)
     flux_out = np.asarray(flux_out)
     err_out = np.asarray(err_out)
-    mask_out = np.asarray(mask_out)
 
-    return wave_out, flux_out, err_out, mask_out
+    return wave_out, flux_out, err_out
+
+
+def load_dispersion_data(disp_dir : str, disp_name : str, data_dir : str, data_name : str, in_wave_units : str, **extras):
+    """
+    Load a spectral resolution (R) table and interpolate resolution onto data wavelengths.
+
+    The dispersion table is read from ``Path(disp_dir) / disp_name`` and is expected to
+    contain columns "R" and "WAVELENGTH" (in microns). The data wavelengths are read
+    from the supplied spectrum FITS file (``Path(data_dir) / data_name``) from the
+    "WAVELENGTH" HDU.
+
+    Parameters
+    ----------
+    disp_dir : str
+        Directory containing the dispersion (resolution) table.
+    disp_name : str
+        Dispersion table FITS file name.
+    data_dir : str
+        Directory containing the spectral FITS file whose wavelengths will be used.
+    data_name : str
+        Spectral FITS file name (contains "WAVELENGTH" HDU).
+    in_wave_units : str
+        Input wavelength units for the spectral FITS file: ``'si'`` (metres) or ``'um'`` (microns).
+    **extras
+        Additional keyword arguments are accepted but ignored.
+
+    Returns
+    -------
+    sigma_interp_kms : numpy.ndarray
+        Interpolated velocity dispersion (sigma) in km/s at the data wavelengths. Shape (M,).
+
+    Raises
+    ------
+    ValueError
+        If `in_wave_units` is not recognised.
+    OSError / FileNotFoundError
+        If either the dispersion table or data FITS file cannot be opened.
+    """
+    # Load dispersion table
+    disp_path = _resolve_path(disp_dir, disp_name)
+    tb = Table.read(disp_path)
+    spec_res = tb["R"].data
+    disp_wave_um = tb["WAVELENGTH"].data
+
+    # Load wavelength data
+    wave_path = _resolve_path(data_dir, data_name)  # use same directory as load_x_data
+    hdul = fits.open(wave_path)
+    data_wave = hdul["WAVELENGTH"].data
+
+    # Convert dispersion wavelength from microns to angstroms
+    disp_wave_A = conversions.convert_wave_um_to_A(disp_wave_um)
+
+    # Convert data wavelegth to angstroms
+    # -- from SI
+    if in_wave_units == "si":
+        data_wave_A = conversions.convert_wave_m_to_A(data_wave)
+    # -- from microns
+    elif in_wave_units == "um":
+        data_wave_A = conversions.convert_wave_um_to_A(data_wave)
+    else:
+        raise ValueError(f'Input wave unit ({in_wave_units}) not recognised')
+
+    # Convert dispersion from dimensionless to km/s
+    c_kms = constants.c.to("km/s").value
+    fwhm_factor = 2 * np.sqrt(2 * np.log(2))
+    sigma_kms = c_kms / (spec_res * fwhm_factor)
+
+    # Interpolate for data wavelengths using dispersion curve
+    interp = interp1d(disp_wave_A, sigma_kms, bounds_error=False, fill_value='extrapolate')
+    sigma_interp_kms = interp(data_wave_A)
+
+    return sigma_interp_kms
+
+
+def load_mask_data(mask_dir : str, mask_name : str, mask_ext : str, convert_to_bool : bool = True):
+    """
+    Load a mask HDU from a FITS file and optionally convert to boolean.
+
+    Parameters
+    ----------
+    mask_dir : str
+        Directory containing the mask FITS file.
+    mask_name : str
+        Mask FITS file name (including suffix).
+    mask_ext : str
+        Name of the HDU/extension that contains the mask array.
+    convert_to_bool : bool, optional
+        If True convert the returned mask to boolean with ``mask.astype(bool)``.
+        Default is True.
+
+    Returns
+    -------
+    mask : numpy.ndarray
+        The mask array read from the FITS file. If `convert_to_bool` is True the
+        returned array has dtype ``bool``.
+
+    Raises
+    ------
+    OSError / FileNotFoundError
+        If the FITS file cannot be opened.
+    KeyError
+        If `mask_ext` is not present in the FITS file.
+    """
+    # Load FITS file
+    path = _resolve_path(mask_dir, mask_name)
+    hdul = fits.open(path)
+
+    # Load mask data
+    mask = hdul[mask_ext].data
+    mask = np.asarray(mask)
+
+    # Optionally convert to Boolean array
+    if convert_to_bool:
+        mask = mask.astype(bool)
+
+    return mask
