@@ -161,60 +161,104 @@ def plot_many_mock_predictions(obs, preds, theta_labels, vary_theta, new_thetas,
 
     return fig
 
+# Redefine obs_kwargs as model was fit before changes to load_X_data (2025/11/05)
 obs_kwargs = {
 
     "phot_kwargs" : {
         "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/photometry",
-        "name" : "007329",
+        "data_name" : "007329_nircam_photometry.fits",
         "data_ext" : "DATA",
-        "mask_ext" : "VALID",
         "in_flux_units" : "magnitude",
         "out_flux_units" : "maggie",
-        "snr_limit" : 20,
-        "return_none" : False,
+        "snr_limit" : 20.0,
         "prefix" : "phot",
         "add_jitter" : True,
         "include_outliers" : True,
+        "fit_obs" : True,
     },
 
     "prism_kwargs" : {
         "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-        "name" : "007329",
-        "version" : "v3.1",
-        "nod" : "extr5",
+        "data_name" : "007329_prism_clear_v3.1_extr5_1D.fits",
         "data_ext" : "DATA",
+        "mask_dir" : None,
+        "mask_name" : None,
         "mask_ext" : None,
+        "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
+        "disp_name" : "uds7329_nirspec_prism_disp.fits",
         "in_wave_units" : "si",
         "out_wave_units" : "A",
         "in_flux_units" : "si",
         "out_flux_units" : "maggie",
         "rescale_factor" : 1.86422,
-        "snr_limit" : 20,
-        "return_none" : False,
+        "snr_limit" : 20.0,
         "prefix" : "prism",
         "add_jitter" : True,
         "include_outliers" : True,
+        "fit_obs" : True,
+    },
+
+    "grat1_kwargs" : {
+        "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
+        "data_name" : "007329_g140m_f100lp_1D.fits",
+        "data_ext" : "DATA",
+        "mask_dir" : None,
+        "mask_name" : None,
+        "mask_ext" : None,
+        "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
+        "disp_name" : "jwst_nirspec_g140m_disp.fits",
+        "in_wave_units" : "um",
+        "out_wave_units" : "A",
+        "in_flux_units" : "ujy",
+        "out_flux_units" : "maggie",
+        "rescale_factor" : 1.86422,
+        "snr_limit" : 20.0,
+        "prefix" : "g140m",
+        "add_jitter" : True,
+        "include_outliers" : True,
+        "fit_obs" : False,
     },
 
     "grat2_kwargs" : {
         "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-        "name" : "007329",
-        "grating" : "g235m",
-        "filter" : "f170lp",
-        "version" : None,
-        "nod" : None,
+        "data_name" : "007329_g235m_f170lp_1D.fits",
         "data_ext" : "DATA",
-        "mask_ext" : "VALID",
+        "mask_dir" : None,
+        "mask_name" : None,
+        "mask_ext" : None,
+        "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
+        "disp_name" : "jwst_nirspec_g235m_disp.fits",
         "in_wave_units" : "um",
         "out_wave_units" : "A",
         "in_flux_units" : "ujy",
         "out_flux_units" : "maggie",
         "rescale_factor" : 1.86422,
         "snr_limit" : 20,
-        "return_none" : False,
-        "prefix" : "grat2",
+        "prefix" : "g235m",
         "add_jitter" : True,
         "include_outliers" : True,
+        "fit_obs" : False,
+    },
+
+    "grat3_kwargs" : {
+        "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
+        "data_name" : "007329_g395m_f290lp_1D.fits",
+        "data_ext" : "DATA",
+        "mask_dir" : None,
+        "mask_name" : None,
+        "mask_ext" : None,
+        "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
+        "disp_name" : "jwst_nirspec_g140m_disp.fits",
+        "in_wave_units" : "um",
+        "out_wave_units" : "A",
+        "in_flux_units" : "ujy",
+        "out_flux_units" : "maggie",
+        "rescale_factor" : 1.86422,
+        "snr_limit" : 20.0,
+        "prefix" : "g395m",
+        "add_jitter" : True,
+        "include_outliers" : True,
+        "fit_obs" : False,
     },
 }
 
@@ -247,6 +291,7 @@ build_model, namespace = load_build_model_from_string(paramfile_text)
 # -- call build_model
 run_params = results['run_params']
 model_kwargs = run_params['model_kwargs']
+# obs_kwargs = run_params['obs_kwargs']  # For load_X_data that use data_dir and data_name, this should work fine
 model = build_model(model_kwargs, obs_kwargs=obs_kwargs)
 
 # Extract parameter names
@@ -259,8 +304,8 @@ theta_best = numeric_chain[imax, :].copy()  # max of log probability
 theta_med = np.nanmedian(numeric_chain, axis=0)  # median of posteriors
 
 # Load wavelength data
-phot_filters, _, _, _ = load_photometry_data(**obs_kwargs["phot_kwargs"])
-prism_wave, _, _, _ = load_prism_data(**obs_kwargs["prism_kwargs"])
+phot_filters, _, _ = load_photometry_data(**obs_kwargs["phot_kwargs"])
+prism_wave, _, _ = load_prism_data(**obs_kwargs["prism_kwargs"])
 
 # Build mock observations
 mock_obs = build_mock_obs(filterset=phot_filters, wavelength=prism_wave)
