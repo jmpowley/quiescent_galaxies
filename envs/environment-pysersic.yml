@@ -1,0 +1,25 @@
+name: pysersic
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python==3.11
+  - pip
+  - arviz
+  - asdf
+  - astropy
+  - corner
+  - jax
+  - jaxopt
+  - matplotlib
+  - numpy
+  - numpyro
+  - pandas
+  - photutils
+  - sep
+  - scipy
+  - tqdm
+  - pip:
+      - equinox
+      - interpax
+      - pysersic
