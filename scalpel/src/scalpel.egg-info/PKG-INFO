@@ -1,0 +1,28 @@
+Metadata-Version: 2.4
+Name: scalpel
+Version: 0.1.0
+Summary: Tools for performing bulge-disc decompositions of IFS cubes
+Author: Jonah Powley
+Requires-Python: >=3.11
+Requires-Dist: arviz
+Requires-Dist: asdf
+Requires-Dist: astropy
+Requires-Dist: corner
+Requires-Dist: jax
+Requires-Dist: jaxopt
+Requires-Dist: matplotlib
+Requires-Dist: numpy
+Requires-Dist: numpyro
+Requires-Dist: pandas
+Requires-Dist: photutils
+Requires-Dist: sep
+Requires-Dist: scipy
+Requires-Dist: tqdm
+Requires-Dist: equinox
+Requires-Dist: interpax
+Requires-Dist: pysersic
+Requires-Dist: astro-sedpy
+Dynamic: author
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

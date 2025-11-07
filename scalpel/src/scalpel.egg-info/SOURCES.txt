@@ -1,0 +1,11 @@
+setup.py
+src/scalpel/__init__.py
+src/scalpel/fitting.py
+src/scalpel/loading.py
+src/scalpel/plotting.py
+src/scalpel/scalpel.py
+src/scalpel.egg-info/PKG-INFO
+src/scalpel.egg-info/SOURCES.txt
+src/scalpel.egg-info/dependency_links.txt
+src/scalpel.egg-info/requires.txt
+src/scalpel.egg-info/top_level.txt
