@@ -19,12 +19,16 @@ from .plotting import call_plot_residual
 
 def fit_band(im, mask, sig, psf, prior, loss_func, seed, verbose):
 
+    if verbose:
+        print("Starting fit...")
+
     # Setup fitter
     fitter = FitSingle(data=im, rms=sig ,mask=mask, psf=psf, prior=prior, loss_func=loss_func)
 
     # Sampling
     fitter.sample(rkey=PRNGKey(seed))
     if verbose:
+        print("Results from fit:")
         print(fitter.sampling_results.retrieve_param_quantiles(return_dataframe=True))
 
     return fitter
@@ -35,6 +39,9 @@ def fit_independent_bands(cutout_kwargs, prior_dict, prior_type, profile_type, s
 
         # Obtain effective wavelengths
         filter = filter_kwargs["filter"]
+        if verbose:
+            print("------------------------")
+            print(f"Independent fit of {filter.upper()}")
 
         # Load data
         im, mask, sig, psf = load_cutout_data(**filter_kwargs)
@@ -60,7 +67,7 @@ def fit_independent_bands(cutout_kwargs, prior_dict, prior_type, profile_type, s
 
         # Make plots
         # -- residual
-        fig = call_plot_residual(fitter, im, psf, profile_type)
+        fig = call_plot_residual(fitter, im, mask, psf, profile_type)
         fig_name = f"{prior_type}_{filter}_residual.pdf"
         fig.savefig(os.path.join(fig_dir, fig_name))
         # -- corner

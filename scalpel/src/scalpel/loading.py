@@ -51,9 +51,9 @@ def load_cutout_data(data_dir, data_name, data_ext, centre, xrange, yrange, psf_
 
     # Check data
     if check_input_data(data=im_crop, rms=sig_crop, psf=psf_crop, mask=mask_crop):
-        print("data looks good!")
+        print("Data looks good!")
     else:
-        print("data looks bad!")
+        print("Data looks bad!")
 
     return im_crop, mask_crop, sig_crop, psf_crop
 
