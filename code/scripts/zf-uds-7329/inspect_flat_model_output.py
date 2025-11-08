@@ -12,11 +12,13 @@ import astropy.cosmology as cosmology
 
 import prospect.io.read_results as reader
 from prospect.plotting.utils import sample_prior, sample_posterior, get_simple_prior
+from prospect.observation import Photometry, Spectrum, PolyOptCal
 
-from plotting import call_allcorner
+from loading import load_photometry_data, load_prism_data, load_grating_data, load_dispersion_data
 from postprocessing import return_sfh, return_sfh_chain, return_sfh_for_one_sigma_quantiles, return_assembly_time, convert_lookback_at_redshift_to_z, load_build_model_from_string, return_assembly_time_for_one_sigma_quantities
 from conversions import convert_wave_A_to_um, convert_wave_A_to_m, convert_flux_maggie_to_cgs
 from statistics import calculate_chisq, calculate_reduced_chisq
+from plotting import call_allcorner
 
 def plot_sfh(age_bins, sfh_best, sfh_chain, weights, logscale=False, show_mass=True, logmass=None, logmass_surv=None, fig_dir=None, fig_name=None, savefig=False):
 
@@ -170,12 +172,13 @@ def plot_obs_model_comparison(obs, pred, lines=None, z=None, fig_dir=None, fig_n
 
     return fig
 
-def plot_spec_obs_model_comparison(obs, pred, spec_to_show, obs_order, lines=None, z=None, fig_dir=None, fig_name=None, savefig=False):
+def plot_spec_obs_model_comparison(obs, pred, spec_to_show, lines=None, z=None, fig_dir=None, fig_name=None, savefig=False):
 
     # Load observations
     # -- find indexes in observations
-    phot_idx = obs_order.index('phot')  # assume photometry is 'phot'
-    spec_idx = obs_order.index(spec_to_show)
+    obs_names = [ob.name for ob in obs]
+    phot_idx = obs_names.index('phot')  # assume photometry is 'phot'
+    spec_idx = obs_names.index(spec_to_show)
     # -- photometry
     phot_obs = obs[phot_idx]
     phot_pred_flux_maggie = pred[phot_idx]
@@ -230,11 +233,11 @@ def plot_spec_obs_model_comparison(obs, pred, spec_to_show, obs_order, lines=Non
     # ax.plot(prism_wave_um, prism_pred_flux_cgs, color='blue', label='Prism fit')
     ax.step(spec_wave_um, spec_pred_flux_cgs, color='blue', label=f'{spec_to_show} fit', where='mid')
     # -- residuals
-    ax_res.scatter(spec_wave_um, 
+    ax_res.scatter(spec_wave_um,
                 #    (prism_obs_flux_cgs-prism_pred_flux_cgs),  # unnormalised
                    ((spec_obs_flux_cgs-spec_pred_flux_cgs) / spec_obs_err_cgs),  # normalised
                    color='blue', marker='.')
-    ax_res.scatter(phot_wave_um, 
+    ax_res.scatter(phot_wave_um,
                 #    phot_obs_flux_cgs-phot_pred_flux_cgs,  # unnormalised
                    ((phot_obs_flux_cgs-phot_pred_flux_cgs) / phot_obs_err_cgs),  # normalised
                    color="orange", marker="o")
@@ -333,9 +336,11 @@ def plot_prior_posterior_comparison(prior_samples, post_samples, labels, fig_dir
 
     fig.tight_layout()
 
-    # Save figure
     if savefig:
-        fig.savefig(os.path.join(fig_dir, fig_name), dpi=400)
+        if fig_name.endswith(".png"):
+            fig.savefig(os.path.join(fig_dir, fig_name), dpi=400)
+        else:
+            fig.savefig(os.path.join(fig_dir, fig_name))
 
     return fig
 
@@ -445,6 +450,68 @@ def plot_quenching_timescale_posterior(t_quenchs, t_quench_best, t_quench_16, t_
 
     return fig
 
+def plot_obs_response(obs, fig_dir=None, fig_name=None, savefig=False):
+
+    # Create figure
+    fig, ax = plt.subplots(1, 1, figsize=(11, 6))
+
+    # Plot response for each observation
+    for ob in obs:
+        if ob.kind == "spectrum":
+            ax.plot(convert_wave_A_to_um(ob.wavelength), ob.response, label=ob.name)
+
+    # Prettify
+    ax.set_xlabel(r'$\lambda_{\rm obs}$ [$\mu$m]', size=18)
+    ax.set_ylabel(r'Response [dimensionless]', size=18)
+    ax.legend()
+    plt.tight_layout()
+
+    # Save figure
+    if savefig:
+        fig.savefig(os.path.join(fig_dir, fig_name), dpi=400)
+
+def extend_observations(old_obs, obs_to_extend, wave_new, disp_new):
+
+    # 
+    new_obs = old_obs.copy()
+    obs_names = [ob.name for ob in old_obs]
+
+    # Loop over each observation to extend
+    for old_ob in old_obs:
+        if old_ob.name == obs_to_extend:
+
+            # Extend spectrum
+            if old_ob.kind == "spectrum":
+
+                # Create mask for old wavelength range
+                in_old = np.isin(wave_new, old_ob.wavelength)
+
+                # Fill in existing data
+                flux_new = np.full_like(wave_new, fill_value=None)
+                err_new = np.full_like(wave_new, fill_value=None)
+                flux_new[in_old] = old_ob.flux
+                err_new[in_old] = old_ob.uncertainty
+
+                # Create new Spectrum object
+                new_spec = Spectrum(
+                    wavelength=wave_new,
+                    # flux=flux_new,
+                    flux=None,
+                    # uncertainty=err_new,
+                    uncertainty=None,
+                    noise=old_ob.noise,
+                    resolution=disp_new,
+                    polynomial_order=10,  # TODO: Change to variable (or however prospector tracks this)
+                    name=old_ob.name,
+                )
+
+                # Replace old spectrum with extended version
+                old_idx = obs_names.index(old_ob.name)
+                new_obs[old_idx] = new_spec
+
+    return new_obs
+    
+
 # Load results from output file
 out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs"
 # out_file = "zf-uds-7329_flat_model_nautilus.h5"
@@ -452,8 +519,10 @@ out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/pros
 # out_file = "zf-uds-7329_flat_model_nautilus_phot_prism.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebF_snr20.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebF_smoothT.h5"
+# out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebT_smoothT_nuisT.h5"
+out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebT_smoothT_nuisF.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_g235m_nebF.h5"
-out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_g235m_nebF_smoothT.h5"
+# out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_g235m_nebF_smoothT.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_g235m_nebT.h5"
 out_path = os.path.join(out_dir, out_file)
 results_type = "nautlius"
@@ -475,6 +544,13 @@ model_kwargs = run_params['model_kwargs']
 obs_kwargs = run_params['obs_kwargs']
 model = build_model(model_kwargs, obs_kwargs=obs_kwargs)
 
+for ob in obs:
+    if ob.kind == "spectrum":
+        print(ob.name)
+        response = ob.response
+        print(response.shape)
+        print(ob.wavelength.shape)
+
 # Extract variables from results
 model_params = results['model_params']
 lnprob = results['lnprobability']
@@ -492,20 +568,16 @@ theta_med = np.nanmedian(numeric_chain, axis=0)  # median of posteriors
 parnames = model.free_params
 parnames_full = model.theta_labels()  # includes labels for all logsfr_ratios
 
-# Get best redshift
+# Extend observations
+prism_wave_new, _, _ = load_prism_data(**obs_kwargs["prism_kwargs"])
+prism_disp_new = load_dispersion_data(**obs_kwargs["prism_kwargs"])
+obs_ext = extend_observations(old_obs=obs, obs_to_extend="prism", wave_new=prism_wave_new, disp_new=prism_disp_new)
+
+# Get redshift
 # z = 3.2
 # z = theta_best[0]
 z_idx = parnames_full.index('zred')
 z = theta_best[z_idx]
-
-# Order observations fit
-obs_order = [obs.rstrip('_kwargs') for obs in list(obs_kwargs.keys()) if obs_kwargs[obs]['fit_obs']]
-# print(obs_order)
-# print(obs_order.index('prism'))
-# print(obs_order.index('grat2'))
-
-print("kind:", obs[0].kind)
-print("name:", obs[0].name)
 
 # Extract SFHs
 age_bins = np.asarray(model_params['agebins'])
@@ -520,11 +592,15 @@ t_form_16, t_form_50, t_form_84, t_forms = return_assembly_time_for_one_sigma_qu
 t_quench_16, t_quench_50, t_quench_84, t_quenchs = return_assembly_time_for_one_sigma_quantities(q=0.1, sfh_chain=sfh_chain, age_bins=age_bins, weights=weights, return_distribution=True)
 
 # Predict model based on theta parameters
+# -- fitted observations
 pred, mass_frac = model.predict(theta=theta_best, observations=obs, sps=sps)
 logmass_best_surv = np.log10(10**logmass_best * mass_frac)
+# -- predict extended observation
+# pred_ext, mass_frac_ext = model.predict(theta=theta_best, observations=obs_ext, sps=sps)
+# logmass_best_surv_ext = np.log10(10**logmass_best * mass_frac_ext)
 
 # Sample prior and posterior distributions
-nsample = 1e4
+nsample = 1e4  # sample using
 prior_samples, labels = sample_prior(model, nsample=int(nsample))
 post_samples = sample_posterior(numeric_chain, weights=weights, nsample=int(nsample))
 
@@ -563,7 +639,7 @@ showpars = parnames  # show all free parameters
 # Plot preparation
 # -- create directory for plots
 fig_base = out_file.rstrip(".h5")
-fig_dir = f"/Users/Jonah/PhD/Research/quiescent_galaxies/figures/zf-uds-7329/{fig_base}"
+fig_dir = f"/Users/Jonah/PhD/Research/quiescent_galaxies/figures/zf-uds-7329/prospector_outputs/{fig_base}"
 if not os.path.exists(fig_dir):
     os.makedirs(fig_dir)
 
@@ -571,10 +647,9 @@ if not os.path.exists(fig_dir):
 show_plots = True
 save_figs = True
 # -- corner plot
-fig_name = f"{fig_base}_corner.png"
-# call_subcorner(results, showpars, truths=theta_best, color="purple", fig_dir=fig_dir, fig_name=fig_name, savefig=True)
-# allcorner_kwargs = dict(color="purple", show_titles=True, qcolor='k')
-# call_allcorner(samples, parnames_full, weights, fig_dir, fig_name, savefig=save_figs, show_all_ticklabels=True, **allcorner_kwargs)
+fig_name = f"{fig_base}_corner.pdf"  # too large for png
+allcorner_kwargs = dict(color="purple", show_titles=True, qcolor='k')
+call_allcorner(samples, parnames_full, weights, fig_dir, fig_name, savefig=save_figs, show_all_ticklabels=True, **allcorner_kwargs)
 # -- SFH plot
 fig_name = f"{fig_base}_sfh.png"
 sfh_kwargs = dict(show_mass=True, logmass=logmass_best, logmass_surv=logmass_best_surv, fig_dir=fig_dir, fig_name=fig_name, savefig=save_figs)
@@ -583,13 +658,13 @@ plot_sfh(age_bins, sfh_best, sfh_chain, weights, **sfh_kwargs)
 # fig_name = f"{fig_base}_obs_pred_comparison.png"
 # plot_obs_model_comparison(obs, pred, lines=zlines_um, z=z, fig_dir=fig_dir, fig_name=fig_name, savefig=True)
 # -- compare specific spectrum
-# TODO: Change to extract desired spectrum
-fig_name1 = f"{fig_base}_spec_obs_pred_comparison1.png"
-fig_name2 = f"{fig_base}_spec_obs_pred_comparison2.png"
-plot_spec_obs_model_comparison(obs, pred, spec_to_show='grat2', obs_order=obs_order, lines=zlines_um, z=z, fig_dir=fig_dir, fig_name=fig_name1, savefig=save_figs)
-plot_spec_obs_model_comparison(obs, pred, spec_to_show='prism', obs_order=obs_order, lines=zlines_um, z=z, fig_dir=fig_dir, fig_name=fig_name2, savefig=save_figs)
+spec_to_show = 'prism'
+fig_name = f"{fig_base}_{spec_to_show}_obs_pred_comparison.png"
+plot_spec_obs_model_comparison(obs, pred, spec_to_show=spec_to_show, lines=zlines_um, z=z, fig_dir=fig_dir, fig_name=fig_name, savefig=save_figs)
+# -- compare extended model
+# plot_spec_obs_model_comparison(obs_ext, pred_ext, spec_to_show=spec_to_show, lines=zlines_um, z=z, fig_dir=fig_dir, fig_name=fig_name, savefig=save_figs)
 # -- prior-posterior comparison
-fig_name = f"{fig_base}_priors_posteriors_comparison.png"
+fig_name = f"{fig_base}_priors_posteriors_comparison.pdf"  # too large for png
 plot_prior_posterior_comparison(prior_samples, post_samples, parnames_full, fig_dir=fig_dir, fig_name=fig_name, savefig=save_figs)
 # -- formation timescale posterior
 fig_name = f"{fig_base}_tzform_posterior.png"
@@ -597,6 +672,9 @@ plot_formation_timescale_posterior(t_forms, t_form_best, t_form_16, t_form_50, t
 # -- quenching timescale posterior
 fig_name = f"{fig_base}_tzquench_posterior.png"
 plot_quenching_timescale_posterior(t_quenchs, t_quench_best, t_quench_16, t_quench_50, t_quench_84, fig_dir=fig_dir, fig_name=fig_name, savefig=save_figs)
+# -- observational response
+fig_name = f"{fig_base}_obs_response.png"
+plot_obs_response(obs, fig_dir=fig_dir, fig_name=fig_name, savefig=save_figs)
 
 if show_plots:
      plt.show()
