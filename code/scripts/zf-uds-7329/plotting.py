@@ -156,6 +156,9 @@ def call_allcorner(samples, labels, weights, fig_dir, fig_name, savefig=True, sh
 
     # Save figure
     if savefig:
-        fig.savefig(os.path.join(fig_dir, fig_name), dpi=300)
+        if fig_name.endswith(".png"):
+            fig.savefig(os.path.join(fig_dir, fig_name), dpi=400)
+        else:
+            fig.savefig(os.path.join(fig_dir, fig_name))
 
     return fig
