@@ -33,7 +33,7 @@ def fit_band(im, mask, sig, psf, prior, loss_func, seed, verbose):
 
     return fitter
 
-def fit_independent_bands(cutout_kwargs, prior_dict, prior_type, profile_type, sky_type, loss_func, seed, verbose, out_dir, fig_dir, **extras):
+def fit_bands_independent(cutout_kwargs, prior_dict, prior_type, profile_type, sky_type, loss_func, seed, verbose, out_dir, fig_dir, **extras):
 
     for filter_kwargs in cutout_kwargs.values():
 
@@ -77,7 +77,7 @@ def fit_independent_bands(cutout_kwargs, prior_dict, prior_type, profile_type, s
 
     # return result
 
-def fit_simultaneous_bands(cutout_kwargs, prior_dict, prior_type, profile_type, sky_type, loss_func, seed, verbose, out_dir, **extras):
+def fit_bands_simultaneous(cutout_kwargs, prior_dict, prior_type, profile_type, sky_type, loss_func, seed, verbose, out_dir, **extras):
     
     filters = []
     waveffs = []
