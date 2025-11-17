@@ -511,6 +511,16 @@ def extend_observations(old_obs, obs_to_extend, wave_new, disp_new):
 
     return new_obs
     
+def save_posteriors(results, model, out_path):
+
+    lnprob = results['lnprobability']
+    numeric_chain = results['unstructured_chain']
+    weights = results["weights"]
+    samples = numeric_chain.T
+    subsamples = sample_posterior(numeric_chain, weights=weights, nsample=int(1e4))
+    names = model.theta_labels()
+
+    np.savez(out_path, lnprob=lnprob, weights=weights, samples=samples, subsamples=subsamples, names=names)
 
 # Load results from output file
 out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs"
@@ -518,9 +528,9 @@ out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/pros
 # out_file = "zf-uds-7329_flat_model_nautilus_2.h5"
 # out_file = "zf-uds-7329_flat_model_nautilus_phot_prism.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebF_snr20.h5"
-# out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebF_smoothT.h5"
+out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebF_smoothT_nuisF.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebT_smoothT_nuisT.h5"
-out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebT_smoothT_nuisF.h5"
+# out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebT_smoothT_nuisF.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_g235m_nebF.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_g235m_nebF_smoothT.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_g235m_nebT.h5"
@@ -544,12 +554,14 @@ model_kwargs = run_params['model_kwargs']
 obs_kwargs = run_params['obs_kwargs']
 model = build_model(model_kwargs, obs_kwargs=obs_kwargs)
 
+# Save model posteriors
+out_name = out_file.rstrip(".h5") + "_posteriors.npz"
+save_posteriors(results=results, model=model, out_path=os.path.join(out_dir, out_name))
+
+# Extract spectral response
 for ob in obs:
     if ob.kind == "spectrum":
-        print(ob.name)
         response = ob.response
-        print(response.shape)
-        print(ob.wavelength.shape)
 
 # Extract variables from results
 model_params = results['model_params']

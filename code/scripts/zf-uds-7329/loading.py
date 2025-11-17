@@ -9,7 +9,7 @@ from astropy import constants
 
 from sedpy.observate import load_filters
 
-import conversions
+from conversions import convert_wave, convert_flux
 from preprocessing import apply_snr_limit, apply_rescaling_factor
 
 # ----------------------
@@ -115,23 +115,8 @@ def load_photometry_data(data_dir : str, data_name : str, data_ext : str, in_flu
     jwst_filters = ([f"jwst_{filt}" for filt in filters])
     sedpy_filters = load_filters(jwst_filters)
 
-    # Convert flux units
-    # -- from magnitudes
-    if in_flux_units == "magnitude":
-        if out_flux_units == "maggie":
-            flux_out, err_out = conversions.convert_flux_magnitude_to_maggie(flux_in, err_in)
-        elif out_flux_units == "ujy":
-            flux_maggie, err_maggie = conversions.convert_flux_magnitude_to_maggie(flux_in, err_in)
-            flux_jy, err_jy = conversions.convert_flux_maggie_to_jy(flux_maggie, err_maggie)
-            flux_out, err_out = conversions.convert_flux_jy_to_ujy(flux_jy, err_jy)
-        elif out_flux_units == "cgs":
-            flux_maggie, err_maggie = conversions.convert_flux_magnitude_to_maggie(flux_in, err_in)
-            wave_m = conversions.convert_wave_um_to_m(wave_in)  # assumes wavelength given in microns
-            flux_out, err_out = conversions.convert_flux_maggie_to_cgs(flux_maggie, err_maggie, wave_m, cgs_factor=1e-19)
-        else:
-            raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
-    else:
-        flux_out, err_out = None, None
+    # Convert units
+    flux_out, err_out = convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in, in_wave_units="um")
 
     # Apply noise floor
     if snr_limit is not None:
@@ -216,58 +201,9 @@ def load_prism_data(data_dir : str, data_name : str, data_ext : str, in_wave_uni
     # -- error
     err_in = hdul["ERR"].data
 
-    # Convert wavelength units
-    # -- from SI
-    if in_wave_units == "si":
-        if out_wave_units == "um":
-            wave_out = conversions.convert_wave_m_to_um(wave_in)
-        elif out_wave_units == "A":
-            wave_out = conversions.convert_wave_m_to_A(wave_in)
-        else:
-            raise ValueError(f'Output wave unit ({out_wave_units}) not recognised')
-    # -- from microns
-    elif in_wave_units == "um":
-        if out_wave_units == "A":
-            wave_out = conversions.convert_wave_um_to_A(wave_in)
-        elif out_wave_units == "um":
-            wave_out = wave_in
-        else:
-            raise ValueError(f'Output wave unit ({out_wave_units}) not recognised')
-    else:
-        raise ValueError(f'Input wave unit ({in_wave_units}) not recognised')
-
-    # Convert flux units
-    # -- from SI
-    if in_flux_units == "si":
-        if out_flux_units == "cgs":
-            flux_out, err_out = conversions.convert_flux_si_to_cgs(flux_in, err_in, cgs_factor=1e-19)
-        elif out_flux_units == "ujy":
-            wave_m = wave_in
-            flux_jy, err_jy = conversions.convert_flux_si_to_jy(wave_m, flux_in, err_in)
-            flux_out, err_out = conversions.convert_flux_jy_to_ujy(flux_jy, err_jy)
-        elif out_flux_units == "maggie":
-            wave_m = wave_in
-            flux_out, err_out = conversions.convert_flux_si_to_maggie(wave_m, flux_in, err_in)
-        else:
-            raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
-    # -- from uJy
-    elif in_flux_units == "ujy":
-        if out_flux_units == "cgs":
-            # -- convert wavelength to m for jy to cgs conversion
-            if in_wave_units == "um":
-                wave_m = conversions.convert_wave_um_to_m(wave_in)
-            elif in_wave_units == "A":
-                wave_m = conversions.convert_wave_A_to_m(wave_in)
-            elif in_wave_units == "m":
-                wave_m = wave_in
-            else:
-                raise ValueError("Input wave units are not 'm', 'um' or 'A' so cannot apply cgs conversion")
-            flux_jy, err_jy = conversions.convert_flux_ujy_to_jy(flux_in, err_in)
-            flux_out, err_out = conversions.convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
-        else:
-            raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
-    else:
-        raise ValueError(f'Input flux unit ({in_flux_units}) not recognised')
+    # Convert units
+    wave_out = convert_wave(wave_in, in_wave_units, out_wave_units)
+    flux_out, err_out = convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in, in_wave_units)
 
     # Apply rescaling factor
     if rescale_factor is not None:
@@ -356,56 +292,9 @@ def load_grating_data(data_dir : str, data_name : str, data_ext : str, in_wave_u
     # -- error
     err_in = hdul["ERR"].data
 
-    # Convert wavelength units
-    # -- from SI
-    if in_wave_units == "si":
-        if out_wave_units == "um":
-            wave_out = conversions.convert_wave_m_to_um(wave_in)
-        elif out_wave_units == "A":
-            wave_out = conversions.convert_wave_m_to_A(wave_in)
-        else:
-            raise ValueError(f'Output wave unit ({out_wave_units}) not recognised')
-    # -- from microns
-    elif in_wave_units == "um":
-        if out_wave_units == "A":
-            wave_out = conversions.convert_wave_um_to_A(wave_in)
-        elif out_wave_units == "um":
-            wave_out = wave_in
-        else:
-            raise ValueError(f'Output wave unit ({out_wave_units}) not recognised')
-    else:
-        raise ValueError(f'Input wave unit ({in_wave_units}) not recognised')
-    
-    # Convert flux units
-    # -- from SI
-    if in_flux_units == "si":
-        if out_flux_units == "cgs":
-            flux_out, err_out = conversions.convert_flux_si_to_cgs(flux_in, err_in, cgs_factor=1e-19)
-        elif out_flux_units == "ujy":
-            wave_m = wave_in
-            flux_jy, err_jy = conversions.convert_flux_si_to_jy(wave_m, flux_in, err_in)
-            flux_out, err_out = conversions.convert_flux_jy_to_ujy(flux_jy, err_jy)
-        elif out_flux_units == "maggie":
-            wave_m = wave_in
-            flux_out, err_out = conversions.convert_flux_si_to_maggie(wave_m, flux_in, err_in)
-        else:
-            raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
-    # -- from uJy
-    elif in_flux_units == "ujy":
-        if out_flux_units == "ujy":
-            flux_out, err_out = flux_in, err_in
-        elif out_flux_units == "cgs":
-            if in_wave_units == "um":
-                wave_m = conversions.convert_wave_um_to_m(wave_in)
-            flux_jy, err_jy = conversions.convert_flux_ujy_to_jy(flux_in, err_in)
-            flux_out, err_out = conversions.convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
-        elif out_flux_units == "maggie":
-            flux_jy, err_jy = conversions.convert_flux_ujy_to_jy(flux_in, err_in)
-            flux_out, err_out = conversions.convert_flux_jy_to_maggie(flux_jy, err_jy)
-        else:
-            raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
-    else:
-        raise ValueError(f'Input flux unit ({in_flux_units}) not recognised')
+    # Convert units
+    wave_out = convert_wave(wave_in, in_wave_units, out_wave_units)
+    flux_out, err_out = convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in, in_wave_units)
 
     # Apply rescaling factor
     if rescale_factor is not None:
@@ -425,7 +314,7 @@ def load_grating_data(data_dir : str, data_name : str, data_ext : str, in_wave_u
 
 def load_dispersion_data(disp_dir : str, disp_name : str, data_dir : str, data_name : str, in_wave_units : str, **extras):
     """
-    Load a spectral resolution (R) table and interpolate resolution onto data wavelengths.
+    Load a spectral resolution table and interpolate resolution onto data wavelengths.
 
     The dispersion table is read from ``Path(disp_dir) / disp_name`` and is expected to
     contain columns "R" and "WAVELENGTH" (in microns). The data wavelengths are read
@@ -470,18 +359,9 @@ def load_dispersion_data(disp_dir : str, disp_name : str, data_dir : str, data_n
     hdul = fits.open(wave_path)
     data_wave = hdul["WAVELENGTH"].data
 
-    # Convert dispersion wavelength from microns to angstroms
-    disp_wave_A = conversions.convert_wave_um_to_A(disp_wave_um)
-
-    # Convert data wavelegth to angstroms
-    # -- from SI
-    if in_wave_units == "si":
-        data_wave_A = conversions.convert_wave_m_to_A(data_wave)
-    # -- from microns
-    elif in_wave_units == "um":
-        data_wave_A = conversions.convert_wave_um_to_A(data_wave)
-    else:
-        raise ValueError(f'Input wave unit ({in_wave_units}) not recognised')
+    # Convert dispersion wavelengths to angstroms
+    disp_wave_A = convert_wave(disp_wave_um, in_wave_units="um", out_wave_units="A")
+    data_wave_A = convert_wave(data_wave, in_wave_units, out_wave_units="A")
 
     # Convert dispersion from dimensionless to km/s
     c_kms = constants.c.to("km/s").value

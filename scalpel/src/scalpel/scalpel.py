@@ -1,4 +1,5 @@
 from .fitting import fit_bands_independent, fit_bands_simultaneous
+from .writing import save_photometry_fit_results_to_asdf
 
 class Scalpel:
     """Performs bulge-disc decomposition of IFU cubes"""
@@ -8,7 +9,7 @@ class Scalpel:
 
         self.config = config
 
-    def fit_bands(self, cutout_kwargs, prior_dict, fit_kwargs):
+    def fit_bands(self, cutout_kwargs, cube_kwargs, prior_dict, fit_kwargs):
         """Fit photometric bands to obtain structural parameters"""
         
         # Fit photometric bands depending on type
@@ -18,19 +19,26 @@ class Scalpel:
             fit_bands_independent(cutout_kwargs=cutout_kwargs, prior_dict=prior_dict, **fit_kwargs)
         # -- simultaneously
         elif fit_type == "simultaneous":
-            fit_bands_simultaneous(cutout_kwargs=cutout_kwargs, prior_dict=prior_dict, **fit_kwargs)
+            results_dict = fit_bands_simultaneous(cutout_kwargs=cutout_kwargs, cube_kwargs=cube_kwargs, in_prior_dict=prior_dict, **fit_kwargs)
         else:
             raise ValueError("Options for fitting are 'independent' or 'simultaneous'")
+
+        return results_dict
 
     def dissect(self):
         """Wrapper for scalpel. Prepares data for fitting and then runs dissection procedure"""
 
         # Load config info
         cutout_kwargs = self.config["cutout_kwargs"]
+        cube_kwargs = self.config["cube_kwargs"]
         prior_dict = self.config["prior_dict"]
         fit_kwargs = self.config["fit_kwargs"]
 
-        # Step 1: fit photometric bands to obtain structural parameters
-        self.fit_bands(cutout_kwargs, prior_dict, fit_kwargs)
+        # Fit photometric bands to obtain structural parameters
+        results_dict = self.fit_bands(cutout_kwargs=cutout_kwargs, cube_kwargs=cube_kwargs, prior_dict=prior_dict, fit_kwargs=fit_kwargs)
 
-        # Step 2: extract structural components from results
+        save_photometry_fit_results_to_asdf(results_dict, prior_dict, cutout_kwargs, cube_kwargs, fit_kwargs)
+
+
+
+        # Extract structural components from results

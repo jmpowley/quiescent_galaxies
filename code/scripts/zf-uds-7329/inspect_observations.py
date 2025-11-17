@@ -3,7 +3,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from conversions import convert_wave_um_to_m, convert_wave_m_to_um, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_jy_to_maggie, convert_wave_A_to_m, convert_wave_m_to_A
+from conversions import convert_wave_um_to_m, convert_wave_A_to_um, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_jy_to_maggie, convert_wave_A_to_m, convert_wave_m_to_A
 from loading import load_photometry_data, load_prism_data, load_grating_data
 
 # ----------------------
@@ -85,6 +85,43 @@ def plot_spectra_snr(waves_um, fluxes_jy, errs_jy, masks, spec_names):
     plt.tight_layout()
     # plt.savefig()
 
+def plot_spectra_phot_1panel(spec, phot):
+
+    # Unpack lists
+    spec_waves_um, spec_fluxes_ujy, spec_fluxes_cgs, spec_fluxes_maggies, spec_errs_ujy, spec_errs_cgs, spec_errs_maggies, spec_masks, spec_names = spec
+    phot_waveffs_um, phot_fluxes_ujy, phot_fluxes_cgs, phot_fluxes_maggies, phot_errs_ujy, phot_errs_cgs, phot_errs_maggies, phot_mask, phot_filters = phot
+    
+    # Create figure
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12, 5))
+
+    # Colors
+    colors = [f"C{i}" for i in range(0, len(phot_waveffs_um))]
+
+    # Plot spectra
+    for (spec_wave_um, spec_flux_cgs, spec_err_cgs, spec_name) in zip(spec_waves_um, spec_fluxes_cgs, spec_errs_cgs, spec_names):
+        ax.plot(spec_wave_um, spec_flux_cgs, color="k", label=spec_name)
+
+    # Plot photometry
+    for (phot_waveff_um, phot_flux_cgs, phot_err_cgs, color) in zip(phot_waveffs_um, phot_fluxes_cgs, phot_errs_cgs, colors):
+        ax.errorbar(phot_waveff_um, phot_flux_cgs, yerr=phot_err_cgs, color=color)
+        ax.scatter(phot_waveff_um, phot_flux_cgs, color=color)
+
+    # Plot filters
+    for (f, color) in zip(phot_filters, colors):
+        wave = convert_wave_A_to_um(f.wavelength)
+        trans = f.transmission / (2 * np.max(f.transmission))  # normalise
+        name = f.nick.lstrip("jwst_").upper()  # nice name (e.g., F444W)
+        ax.fill_between(wave, 0, trans, color=color, alpha=0.3)
+        ax.fill_between(wave, np.nan, np.nan, color=color, label=name)
+        ax.plot(wave, trans, color=color)
+
+    # Prettify
+    ax.set_xlabel(r'$\lambda_{obs}~[\mu m]$', size=18)
+    ax.set_ylabel(r'$f_\lambda~[~10^{-19}$ erg s$^{-1}$ cm$^{-2}$ Å$^{-1}]$', size=18)
+    ax.set_ylim(0, None)
+    ax.legend(loc="upper left", ncols=len(phot_fluxes_cgs)+len(spec_fluxes_cgs), bbox_to_anchor=[0, 1.1], framealpha=0)
+    plt.tight_layout()
+
 def plot_four_panel_spectra_for_unit(spec, phot, flux_unit):
 
     # Unpack lists
@@ -145,85 +182,28 @@ def main():
 
     obs_kwargs = {
 
-         "phot_params" : {
-            "phot_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/photometry",
-            "name" : "007329",
+        "phot_kwargs" : {
+            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/photometry",
+            "data_name" : "007329_nircam_photometry.fits",
             "data_ext" : "DATA",
-            "mask_ext" : "VALID",
             "in_flux_units" : "magnitude",
             "out_flux_units" : "ujy",
-            "snr_limit" : 20,
-            "return_none" : False,
+            "snr_limit" : 20.0,
         },
 
-        "prism_params" : {
-            "prism_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-            "name" : "007329",
-            "version" : "v3.1",
-            "nod" : "extr5",
+        "prism_kwargs" : {
+            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
+            "data_name" : "007329_prism_clear_v3.1_extr5_1D.fits",
             "data_ext" : "DATA",
+            "mask_dir" : None,
+            "mask_name" : None,
             "mask_ext" : None,
             "in_wave_units" : "si",
             "out_wave_units" : "um",
             "in_flux_units" : "si",
             "out_flux_units" : "ujy",
             "rescale_factor" : 1.86422,
-            "snr_limit" : 20,
-            "return_none" : False,
-        },
-
-         "grat1_params" : {
-            "grating_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-            "name" : "007329",
-            "grating" : "g140m",
-            "filter" : "f100lp",
-            "version" : None,
-            "nod" : None,
-            "data_ext" : "DATA",
-            "mask_ext" : "VALID",
-            "in_wave_units" : "um",
-            "out_wave_units" : "um",
-            "in_flux_units" : "ujy",
-            "out_flux_units" : "ujy",
-            "rescale_factor" : 1.86422,
-            "snr_limit" : 20,
-            "return_none" : False,
-        },
-
-        "grat2_params" : {
-            "grating_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-            "name" : "007329",
-            "grating" : "g235m",
-            "filter" : "f170lp",
-            "version" : None,
-            "nod" : None,
-            "data_ext" : "DATA",
-            "mask_ext" : "VALID",
-            "in_wave_units" : "um",
-            "out_wave_units" : "um",
-            "in_flux_units" : "ujy",
-            "out_flux_units" : "ujy",
-            "rescale_factor" : 1.86422,
-            "snr_limit" : 20,
-            "return_none" : False,
-        },
-
-        "grat3_params" : {
-            "grating_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-            "name" : "007329",
-            "grating" : "g395m",
-            "filter" : "f290lp",
-            "version" : None,
-            "nod" : None,
-            "data_ext" : "DATA",
-            "mask_ext" : "VALID",
-            "in_wave_units" : "um",
-            "out_wave_units" : "um",
-            "in_flux_units" : "ujy",
-            "out_flux_units" : "ujy",
-            "rescale_factor" : 1.86422,
-            "snr_limit" : 20,
-            "return_none" : False,
+            "snr_limit" : 20.0,
         },
     }
 
@@ -243,13 +223,12 @@ def main():
     spec_masks = []
 
     # Load photometry data
-    
-    # phot_filters, phot_fluxes_jy, phot_errs_jy, phot_mask = load_photometry_data(phot_dir, name, flux_units='jy', snr_limit=20)
-    phot_filters, phot_fluxes_jy, phot_errs_jy, phot_mask = load_photometry_data(**obs_kwargs['phot_params'])
-    phot_fluxes_ujy, phot_errs_ujy = convert_flux_jy_to_ujy(phot_fluxes_jy, phot_errs_jy)
-    phot_waveffs_um = [f.wave_effective for f in phot_filters]
+    phot_filters, phot_fluxes_ujy, phot_errs_ujy = load_photometry_data(**obs_kwargs['phot_kwargs'])
+    phot_mask = None
+    phot_fluxes_jy, phot_errs_jy = convert_flux_ujy_to_jy(phot_fluxes_ujy, phot_errs_ujy)
+    phot_waveffs_A = [f.wave_effective for f in phot_filters]
+    phot_waveffs_um = convert_wave_A_to_um(phot_waveffs_A)
     phot_waveffs_m = convert_wave_um_to_m(phot_waveffs_um)
-    phot_waveffs_A = convert_wave_m_to_A(phot_waveffs_m)
     phot_fluxes_cgs, phot_errs_cgs = convert_flux_jy_to_cgs(phot_waveffs_m, phot_fluxes_jy, phot_errs_jy, cgs_factor=1e-19)
     phot_fluxes_maggies, phot_errs_maggies = convert_flux_jy_to_maggie(phot_fluxes_jy, phot_errs_jy)
 
@@ -258,20 +237,21 @@ def main():
 
         # Load data
         # -- skip photometry
-        if obs_key == "phot_params":
+        if obs_key == "phot_kwargs":
             continue
         # -- prism
-        elif obs_key == 'prism_params':
-            wave_um, flux_ujy, err_ujy, mask = load_prism_data(**obs_kwargs['prism_params'])
+        elif obs_key == 'prism_kwargs':
+            wave_um, flux_ujy, err_ujy = load_prism_data(**obs_kwargs['prism_kwargs'])
             flux_jy, err_jy = convert_flux_ujy_to_jy(flux_ujy, err_ujy)
             wave_m = convert_wave_um_to_m(wave_um)
             flux_cgs, err_cgs = convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
             flux_maggie, err_maggie = convert_flux_jy_to_maggie(flux_jy, err_jy)
+            mask = None
         # -- grating
         else:
             # Extract grating and filter
             # -- microjanskies
-            wave_um, flux_ujy, err_ujy, mask = load_grating_data(**obs_kwargs[obs_key])
+            wave_um, flux_ujy, err_ujy = load_grating_data(**obs_kwargs[obs_key])
             # -- cgs units
             flux_jy, err_jy = convert_flux_ujy_to_jy(flux_ujy, err_ujy)
             wave_m = convert_wave_um_to_m(wave_um)
@@ -279,6 +259,7 @@ def main():
             # -- maggies
             flux_jy, err_jy = convert_flux_ujy_to_jy(flux_ujy, err_ujy)
             flux_maggie, err_maggie = convert_flux_jy_to_maggie(flux_jy, err_jy)
+            mask = None
 
         # Append data to list
         spec_waves_um.append(wave_um)
@@ -294,9 +275,10 @@ def main():
     spec = [spec_waves_um, spec_fluxes_ujy, spec_fluxes_cgs, spec_fluxes_maggies, spec_errs_ujy, spec_errs_cgs, spec_errs_maggies, spec_masks, spec_names]
     phot = [phot_waveffs_um, phot_fluxes_ujy, phot_fluxes_cgs, phot_fluxes_maggies, phot_errs_ujy, phot_errs_cgs, phot_errs_maggies, phot_mask, phot_filters]
 
-    # # Make plots
-    plot_spectra(spec, phot)
-    plot_spectra_snr(spec_waves_um, spec_fluxes_ujy, spec_errs_ujy, spec_masks, spec_names)
+    # Make plots
+    plot_spectra_phot_1panel(spec, phot)
+    # plot_spectra(spec, phot)
+    # plot_spectra_snr(spec_waves_um, spec_fluxes_ujy, spec_errs_ujy, spec_masks, spec_names)
     # plot_four_panel_spectra_for_unit(spec, phot, flux_unit='cgs')
 
     plt.show()

@@ -17,14 +17,15 @@ from prospect.fitting import fit_model, lnprobfn
 from prospect.io import write_results as writer
 
 from loading import load_photometry_data, load_prism_data, load_grating_data, load_mask_data, load_dispersion_data
-
 from preprocessing import crop_bad_spectral_resolution
 
 # ----------------
 # Helper functions
 # ----------------
 def convert_zred_to_agebins(zred=None, nbins_sfh=None, **extras):
-        """ Returns age bins going [0, 10Myr, 30Myr, 100Myr, ...] and nbin-2 equally spaced (in logtime) bins from 100Myr to age_universe
+        """ 
+        Returns age bins going [0, 10Myr, 30Myr, 100Myr, ...] and nbin-2 equally spaced 
+        (in logtime) bins from 100Myr to age_universe
         """
 
         # TODO: Add cosmology as kwarg
@@ -46,8 +47,7 @@ def convert_zred_to_agebins(zred=None, nbins_sfh=None, **extras):
         return agebins.T
 
 def convert_logmass_to_masses(logmass=None, logsfr_ratios=None, zred=None, **extras):
-        """ Computes masses formed in each bin from SFR ratios
-        """
+        """ Computes masses formed in each bin from SFR ratios"""
 
         # Calculate age bins and SFR ratios
         agebins = convert_zred_to_agebins(zred=zred, **extras)
@@ -64,8 +64,7 @@ def convert_logmass_to_masses(logmass=None, logsfr_ratios=None, zred=None, **ext
         return mass_per_bin
 
 def convert_to_dust1(dust1_fraction=None, dust1=None, dust2=None, **extras):
-        """Convert second component of dust model to first component based on fitted fraction of second dust model
-        """
+        """Convert second component of dust model to first component based on fitted fraction of second dust model"""
 
         dust1 = dust1_fraction * dust2
         
@@ -106,18 +105,19 @@ def build_noise(prefix="", add_jitter=False, include_outliers=True, correlated=F
     """
 
     kernels = []
+
+    # Build jitter kernel to reference a model parname
     if add_jitter:
-        # create an uncorrelated jitter kernel that will reference a model parname
         jitter_par = f"{prefix}_jitter" if prefix else "jitter"
         jitter = Uncorrelated(parnames=[jitter_par])
         kernels.append(jitter)
 
-    # Build outlier NoiseModel (diagonal / 1D)
+    # Build outlier NoiseModel to reference a model parname
     if include_outliers:
         frac_name = f"{prefix}_f_outlier" if prefix else "f_outlier"
         nsig_name = f"{prefix}_nsigma_outlier" if prefix else "nsigma_outlier"
         nm = NoiseModel(frac_out_name=frac_name, nsigma_out_name=nsig_name)
-        # Return if only want outlier model (no jitter)
+        # -- return only outlier model if no jitter
         if len(kernels) == 0:
             return nm
         kernels.append(nm)
@@ -125,7 +125,7 @@ def build_noise(prefix="", add_jitter=False, include_outliers=True, correlated=F
     if len(kernels) == 0:
         return None
     
-    # ensure weight_by length matches kernels length
+    # Ensure weight_by length matches kernels length
     weight_by = ["unc"] * len(kernels)
     return NoiseModelCov(kernels=kernels, metric_name="unc", weight_by=weight_by)
 
@@ -178,7 +178,7 @@ def build_obs(obs_kwargs, **extras):
                                                                                             prism_err,
                                                                                             prism_mask,
                                                                                             prism_res,
-                                                                                            zred=3.2,  # TODO: Change?
+                                                                                            zred=3.2,  # TODO: Change to variable?
                                                                                             wave_lo=2000,
                                                                                             wave_hi=7000,
                                                                                             )
@@ -272,6 +272,7 @@ def build_model(model_kwargs, obs_kwargs=None, **extras):
     # Load kwargs
     add_nebular = model_kwargs["add_nebular"]
     smooth_spectra = model_kwargs["smooth_spectra"]
+    add_nuisance = model_kwargs["add_nuisance"]
     
     # Continuity SFH
     model_params = TemplateLibrary["continuity_sfh"]
@@ -357,18 +358,19 @@ def build_model(model_kwargs, obs_kwargs=None, **extras):
 
     # Add per-observation noise/outlier parameters
     for key, obs in obs_kwargs.items():
-        p = obs.get('prefix')
-        model_params[f"{p}_jitter"] = dict(
-            N=1, isfree=True, init=1.0,
-            prior=priors.TopHat(mini=0.5, maxi=5.0)
-        )
-        model_params[f"{p}_f_outlier"] = dict(
-            N=1, isfree=True, init=1e-3,
-            prior=priors.TopHat(mini=1e-5, maxi=1e-2)
-        )
-        model_params[f"{p}_nsigma_outlier"] = dict(
-            N=1, isfree=False, init=50.0
-        )
+        if obs.get('fit_obs'):
+            p = obs.get('prefix')
+            model_params[f"{p}_jitter"] = dict(
+                N=1, isfree=True, init=1.0,
+                prior=priors.TopHat(mini=0.5, maxi=5.0)
+            )
+            model_params[f"{p}_f_outlier"] = dict(
+                N=1, isfree=True, init=1e-3,
+                prior=priors.TopHat(mini=1e-5, maxi=1e-2)
+            )
+            model_params[f"{p}_nsigma_outlier"] = dict(
+                N=1, isfree=False, init=50.0
+            )
     
     # Add spectral smoothing
     if smooth_spectra:
@@ -379,8 +381,9 @@ def build_model(model_kwargs, obs_kwargs=None, **extras):
         model_params['fftsmooth'] = {'N':1, 'isfree': False, 'init': True}
 
     # Add nuiscance parameter to test sampling
-    # model_params["bob"]["isfree"] = True
-    # model_params["bob"]["prior"] = priors.TopHat(mini=0, maxi=1)
+    if add_nuisance:
+        model_params["bob"] = dict(N=1, isfree=True, init=0.5,
+                                prior=priors.TopHat(mini=0, maxi=1))
     
     # Build model
     model = SpecModel(model_params)
@@ -419,6 +422,7 @@ def build_sps(zcontinuous=1, **extras):
 #     return obs, model, sps
 
 def build_all(obs_kwargs, model_kwargs, **extras):
+    """Build all models"""
 
     obs = build_obs(obs_kwargs)
     model = build_model(model_kwargs, obs_kwargs=obs_kwargs)
@@ -636,8 +640,9 @@ def main():
 
     model_kwargs = {
         "zred" : 3.19,
-        "add_nebular" : True,
-        "smooth_spectra": True,
+        "add_nebular" : False,
+        "smooth_spectra" : True,
+        "add_nuisance" : False,
         }
     
     # Store all dicts in run_params
@@ -676,7 +681,7 @@ def main():
     expected_names = obs_kwargs.keys()
     obs_map = dict(zip(expected_names, obs))
 
-    # Compose new_obs list: include only if corresponding params 'return_none' is False and 'fit_obs' is True
+    # Compose new_obs list: include only if 'fit_obs' is True
     new_obs = []
     for key in obs_kwargs.keys():
         if obs_kwargs[key].get("fit_obs", True):
@@ -701,13 +706,14 @@ def main():
     # -- other key info
     neb_str = "T" if model_kwargs["add_nebular"] else "F"
     smooth_str = "T" if model_kwargs["smooth_spectra"] else "F"
+    nuis_str = "T" if model_kwargs["add_nuisance"] else "F"
  
     # Save results
-    out_name = f"zf-uds-7329_flat_model_nautlius_{obs_str}_neb{neb_str}_smooth{smooth_str}.h5"
+    out_name = f"zf-uds-7329_flat_model_nautlius_{obs_str}_neb{neb_str}_smooth{smooth_str}_nuis{nuis_str}.h5"
     out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs"
     out_path = os.path.join(out_dir, out_name)
     writer.write_hdf5(out_path, run_params, model, new_obs,
-                        sampling_result=output["sampling"], 
+                        sampling_result=output["sampling"],
                         # optimize_result_tuple=output["optimization"],
                         sps=sps
                     )

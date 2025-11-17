@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,15 +7,48 @@ from astropy.io import fits
 
 from pysersic.results import plot_image
 from pysersic import check_input_data
-from pysersic.priors import SourceProperties
 
-def load_cutout_data(data_dir, data_name, data_ext, centre, xrange, yrange, psf_dir, psf_name, psf_ext, snr_limit, plot=False, **extras):
+def _resolve_path(file_dir: str, file_name: str) -> Path:
+    """
+    Construct a `pathlib.Path` from a directory and file name.
+
+    Parameters
+    ----------
+    file_dir : str
+        Directory containing the file. If `None`, a ValueError is raised.
+    file_name : str
+        File name (may include subdirectories or suffix).
+
+    Returns
+    -------
+    pathlib.Path
+        Path object pointing to `file_dir / file_name`.
+
+    Raises
+    ------
+    ValueError
+        If `file_dir` is `None`.
+    """
+    if file_dir is None:
+        raise ValueError("Either path or data_dir must be provided")
+    return Path(file_dir) / file_name
+
+def _rebuild_wave_from_header(header):
+
+    try:
+        wave = np.arange(header["CRVAL3"], header["CRVAL3"] + (header["NAXIS3"] - 1) * header["CDELT3"], header["CDELT3"])
+    except Exception as e:
+        return e
+    
+    return wave
+
+def load_cutout_data(data_dir, data_name, data_ext, centre, width, height, psf_dir, psf_name, psf_ext, snr_limit, plot=False, **extras):
     """
     Loads NIRCam cutouts
     """
 
     # Load FITS file
-    path = os.path.join(data_dir, data_name)  # TODO: Change to _resolve_path
+    path = _resolve_path(data_dir, data_name)
     hdul = fits.open(path)
 
     # Extract image data
@@ -26,23 +60,37 @@ def load_cutout_data(data_dir, data_name, data_ext, centre, xrange, yrange, psf_
     #sig = 0.01/np.sqrt(np.abs(wht)) + 0.1*np.sqrt(np.abs(im))
     sig = (1 / snr_limit) * np.sqrt(np.abs(im_in))
     
+    # Extract subregion
+    # -- find lower/upper bounds
+    ycen, xcen = centre
+    halfw = width // 2
+    halfh = height // 2
+    x0 = xcen - halfw
+    x1 = x0 + width
+    y0 = ycen - halfh
+    y1 = y0 + height
+    # -- apply to images
+    im_crop  = im_in[y0:y1, x0:x1]
+    wht_crop = wht_in[y0:y1, x0:x1]
+    sig_crop = sig[y0:y1, x0:x1]
+    mask_crop= mask_in[y0:y1, x0:x1]
+
     # load the PSF data
     psf_path = os.path.join(psf_dir, psf_name)  # TODO: Change to/add in _resolve_path function
     psf_hdul = fits.open(psf_path)
     psf_in = fits.getdata(psf_path)
     # -- extract subregion (smaller than data)
-    cen = int(0.5*psf_in.shape[0])
-    psf_crop = psf_in[cen-18:cen+19, cen-18:cen+19]
+    pcen = int(0.5*psf_in.shape[0])
+    n_pad = 1
+    px0 = pcen - halfw + n_pad
+    px1 = px0 + (width - 2*n_pad)
+    py0 = pcen - halfh + n_pad
+    py1 = py0 + (height - 2*n_pad)
+    psf_crop = psf_in[py0:py1, px0:px1]
+    # psf_crop = psf_in[cen-18:cen+19, cen-18:cen+19]
     # -- normalise
     psf_crop /= np.sum(psf_crop)  # normalise
     psf_crop = psf_crop.astype(float)
-
-    # Extract subregion (use ycen, xcen to match numpy [row, col])
-    ycen, xcen = centre
-    im_crop  = im_in[ycen-21:ycen+22, xcen-21:xcen+22]
-    wht_crop = wht_in[ycen-21:ycen+22, xcen-21:xcen+22]
-    sig_crop = sig[ycen-21:ycen+22, xcen-21:xcen+22]
-    mask_crop = mask_in[ycen-21:ycen+22, xcen-21:xcen+22]
 
     # Plot data
     if plot:
@@ -57,15 +105,56 @@ def load_cutout_data(data_dir, data_name, data_ext, centre, xrange, yrange, psf_
 
     return im_crop, mask_crop, sig_crop, psf_crop
 
-def set_priors(im, mask, profile_type, sky_type, prior_dict):
+def load_cube_data(data_dir, data_name, data_ext, wave_from_hdr, in_wave_units, out_wave_units, centre, width, height, wave_min, wave_max):
 
-    # Generate priors from image
-    props = SourceProperties(im, mask=mask) # Optional mask
-    prior = props.generate_prior(profile_type=profile_type, sky_type=sky_type)
+    # TODO: Add in PSF for IFS data?
 
-    # Set uniform priors from dict
-    for key, val in prior_dict.items():
-        lo, hi = val
-        prior.set_uniform_prior(key, lo, hi)
+    # Load FITS file
+    path = _resolve_path(data_dir, data_name)
+    hdul = fits.open(path)
 
-    return prior
+    # Extract spectral data
+    # -- wavelength
+    if wave_from_hdr:
+        wave_in = _rebuild_wave_from_header(hdul[data_ext].header)
+    # -- flux
+    if data_ext is not None:
+        cube_in = hdul[data_ext].data
+    else:
+        cube_in = hdul["DATA"].data
+    # -- error
+    err_in = hdul["ERR"].data
+
+    # Convert wavelength units
+    # TODO: Apply conversions
+
+
+    wave_out = wave_in
+    cube_out = cube_in
+    err_out = err_in
+    nlam, ny, nx = cube_in.shape
+
+    # Extract subregion
+    if all(x is not None for x in (centre, height, width)):
+        # -- find lower/upper bounds
+        ycen, xcen = centre
+        halfw = width // 2
+        halfh = height // 2
+        x0 = xcen - halfw
+        x1 = x0 + width
+        y0 = ycen - halfh
+        y1 = y0 + height
+        # -- apply to images
+        cube_out  = cube_out[:, y0:y1, x0:x1]
+        err_out = err_out[:, y0:y1, x0:x1]
+        nlam, ny, nx = cube_out.shape  # update shape
+
+    # Crop wavelength axis
+    if wave_min is not None and wave_max is not None:
+        wave_mask = (wave_out > wave_min) & (wave_out < wave_max)
+        wave_out = wave_out[wave_mask]
+        cube_out = cube_out[wave_mask, :, :]
+        err_out  = err_out[wave_mask, :, :]
+        nlam, ny, nx = cube_out.shape  # update shape
+
+    return wave_out, cube_out, err_out
