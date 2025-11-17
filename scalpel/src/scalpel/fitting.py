@@ -23,7 +23,7 @@ def _set_priors(image, mask, profile_type, sky_type, prior_dict):
     # Generate priors from image
     # props = SourceProperties(im, mask=mask) # Optional mask
     # prior = props.generate_prior(profile_type=profile_type, sky_type=sky_type)
-    prior = autoprior(image=image, profile_type=profile_type, mask=mask)
+    prior = autoprior(image=image, profile_type=profile_type, mask=mask, sky_type=sky_type)
 
     # Set uniform priors from dict
     for prior_type, prior_type_dict in prior_dict.items():
