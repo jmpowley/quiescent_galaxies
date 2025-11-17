@@ -9,7 +9,7 @@ import asdf
 
 from sedpy.observate import load_filters
 
-from scalpel.fitting import return_linked_param, return_const_param
+from scalpel.helpers import return_linked_param, return_const_param
 
 from scalpel.plotting import plot_residuals_grid
 
@@ -93,11 +93,11 @@ def return_individual_fit_posterior(path, params):
 # Load output file
 # out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/scalpel_test"
 # out_name = "sersic_exp_sim_fit_results.asdf"
-out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/gs-9209_sersic"
+# out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/gs-9209_sersic"
 # out_name = "sersic_sim_mcmc_poly_fit_results.asdf"
-out_name = "sersic_sim_mcmc_bspline_fit_results.asdf"
-# out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/gs-9209_sersic_exp"
-# out_name = "sersic_exp_sim_fit_results.asdf"
+# out_name = "sersic_sim_mcmc_bspline_fit_results.asdf"
+out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/gs-9209_sersic_exp"
+out_name = "sersic_exp_sim_fit_results.asdf"
 tree = asdf.open(os.path.join(out_dir, out_name))
 
 # Load tree data
@@ -115,13 +115,7 @@ linked_params = fit_kwargs['linked_params']
 const_params = fit_kwargs['const_params']
 params = linked_params + const_params
 waveffs = np.asarray([load_filters(['jwst_' + filter])[0].wave_effective / 1e4 for filter in filters])
-
 wv_to_save = tree["wv_to_save"]
-# inv_waveffs = 1 / waveffs
-# wv_to_save = np.linspace(min(inv_waveffs),max(inv_waveffs), num=50)
-# wv_to_save = np.linspace(min(waveffs),max(waveffs), num=50)
-
-print(wv_to_save.min(), wv_to_save.max())
 
 # Load individual fits
 ind_posts = {}
@@ -143,8 +137,8 @@ ind_trees = [asdf.load(path) for path in ind_paths]
 
 # Make plots
 # fig_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/scalpel_test"
-fig_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/gs-9209_sersic"
-# fig_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/gs-9209_sersic_exp"
+# fig_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/gs-9209_sersic"
+fig_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/gs-9209_sersic_exp"
 # -- linked parameters
 fig = plot_linked_parameters(results=results, filters=filters, linked_params=linked_params, wv_to_save=wv_to_save, waveffs=waveffs, ind_meds=ind_param_meds, ind_uncs=ind_param_uncs)
 # fig_name = "gs-9209_multifit_bspline_linked_parameters.png"
