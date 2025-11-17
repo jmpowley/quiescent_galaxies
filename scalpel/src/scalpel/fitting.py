@@ -35,6 +35,7 @@ def _set_priors(image, mask, profile_type, sky_type, prior_dict):
     return prior
 
 def fit_band(image, mask, sig, psf, prior, loss_func, method, rkey, verbose):
+    """Fits individual band"""
 
     if verbose:
         print("Starting fit...")
@@ -59,9 +60,9 @@ def fit_band(image, mask, sig, psf, prior, loss_func, method, rkey, verbose):
     elif method == "svi-flow":
         result = fitter.estimate_posterior(rkey=rkey_est)
     if verbose:
-        print("Results from fit:")
+        print("Result from fit:")
         if method == "mcmc":
-            print(fitter.sampling_results.retrieve_param_quantiles(return_dataframe=True))
+            print(result.retrieve_param_quantiles(return_dataframe=True))
 
     return fitter, result
 
@@ -91,7 +92,7 @@ def fit_bands_independent(cutout_kwargs, prior_dict, profile_type, sky_type, los
         # Save results
         out_name = f"{profile_type}_fit_{filter}.asdf"
         out_path = os.path.join(out_dir, out_name)
-        fitter.sampling_results.save_result(out_path)
+        result.save_result(out_path)
 
         # Make plots
         # -- residual
@@ -177,21 +178,26 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
         fitter_dict[filter] = fitter
 
     # Create fine grid of wavelengths
+    waveffs = np.asarray(waveffs)
     if use_cube_wave and cube_kwargs is not None:
         wave, _, _ = load_cube_data(**cube_kwargs)
         wv_to_save = wave
     else:
-        waveffs = np.asarray(waveffs)
         wv_to_save = np.linspace(min(waveffs), max(waveffs), num=50)
     # -- invert wavelengths
     if invert_wave:
+        waveffs = 1 / waveffs
         wv_to_save = 1 / wv_to_save
+
+    print(fitter_dict.keys())
+    print(filters, len(filters))
+    print(waveffs, np.size(waveffs))
 
     # Create MultiFitter object
     # -- polynomial
     if multifitter == "poly":
         MultiFitter = FitMultiBandPoly(fitter_list=[fitter_dict[f] for f in filters],
-                                    wavelengths=wv_to_save,
+                                    wavelengths=waveffs,
                                     band_names=filters,
                                     linked_params=linked_params,
                                     const_params=const_params,
@@ -201,8 +207,7 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
     # -- b-spline
     elif multifitter == "bspline":
         MultiFitter = FitMultiBandBSpline(fitter_list=[fitter_dict[f] for f in filters],
-                                    # wavelengths=inv_waveffs,
-                                    wavelengths=wv_to_save,
+                                    wavelengths=waveffs,
                                     band_names=filters,
                                     linked_params=linked_params,
                                     const_params=const_params,
@@ -224,29 +229,3 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
     results_dict = results.retrieve_med_std()
 
     return results_dict
-
-def return_linked_param(results_dict, wv_to_save, param, invert_wave : bool, return_std : bool):
-
-    # Load median and standard deviation
-    param_at_wv, std_at_wav = results_dict[f'{param}_at_wv']
-
-    # Return in inverted or normal wavelengths
-    if invert_wave:
-        wv_out = 1 / wv_to_save
-    else:
-        wv_out = wv_to_save
-
-    if return_std:
-        return wv_out, param_at_wv, std_at_wav
-    else:
-        return wv_out, param_at_wv
-
-def return_const_param(results_dict, param, return_std : bool):
-
-    # Load median and standard deviation
-    param, std = results_dict[f'{param}']
-
-    if return_std:
-        return param, std
-    else:
-        return param
