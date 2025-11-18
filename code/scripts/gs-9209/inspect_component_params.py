@@ -1,16 +1,13 @@
 import os
 import glob
 
+import asdf
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-
-import asdf
-
 from sedpy.observate import load_filters
 
 from scalpel.helpers import return_linked_param, return_const_param
-
 from scalpel.plotting import plot_residuals_grid
 
 def plot_linked_parameters(results, filters, linked_params, wv_to_save, waveffs, ind_meds=None, ind_uncs=None):
@@ -24,9 +21,9 @@ def plot_linked_parameters(results, filters, linked_params, wv_to_save, waveffs,
         ax = axes[i]
         
         # Plot fit for each param
-        wv, param_at_wv, std_at_wv = return_linked_param(results, wv_to_save, param=param, invert_wave=False, return_std=True)
-        ax.plot(wv, param_at_wv, color='crimson', label="Multi-fit")
-        ax.fill_between(wv, param_at_wv-std_at_wv, param_at_wv+std_at_wv, color='crimson', alpha=0.3)
+        param_at_wv, std_at_wv = return_linked_param(results, param=param, return_std=True)
+        ax.plot(wv_to_save, param_at_wv, color='crimson', label="Multi-fit")
+        ax.fill_between(wv_to_save, param_at_wv-std_at_wv, param_at_wv+std_at_wv, color='crimson', alpha=0.3)
 
         # Plot value for each cutout
         for j, filter in enumerate(filters):
@@ -97,7 +94,8 @@ def return_individual_fit_posterior(path, params):
 # out_name = "sersic_sim_mcmc_poly_fit_results.asdf"
 # out_name = "sersic_sim_mcmc_bspline_fit_results.asdf"
 out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/gs-9209_sersic_exp"
-out_name = "sersic_exp_sim_fit_results.asdf"
+# out_name = "sersic_exp_sim_mcmc_bspline_fit_results.asdf"
+out_name = "sersic_exp_sim_mcmc_poly_fit_results.asdf"
 tree = asdf.open(os.path.join(out_dir, out_name))
 
 # Load tree data
@@ -122,8 +120,7 @@ ind_posts = {}
 ind_param_meds = {}
 ind_param_uncs = {}
 for f in filters:
-    ind_path = os.path.join(out_dir, f"sersic_mcmc_fit_{f}.asdf")
-    # ind_path = os.path.join(out_dir, f"sersic_exp_fit_{f}.asdf")
+    ind_path = os.path.join(out_dir, f"{profile_type}_{method}_fit_{f}.asdf")
     param_posts, param_meds, param_uncs = return_individual_fit_posterior(ind_path, params)
     
     ind_posts[f] = param_posts
