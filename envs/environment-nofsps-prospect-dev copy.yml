@@ -1,0 +1,26 @@
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - cython
+  - hdf5
+  - h5py
+  - emcee
+  - dynesty
+  - nautilus-sampler
+  - gsl
+  - openblas
+  - openmpi
+  - mpi4py
+  - git
+  - gfortran
+  - pip
+  - pip:
+    - jupyterlab
+    - matplotlib
+    - astropy
+    - astro-sedpy
+    # install fsps from activation script
+    # install prospector developer version from github or local fork

@@ -1,0 +1,31 @@
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - cython
+  - hdf5
+  - h5py
+  - emcee
+  - dynesty
+  - nautilus-sampler
+  - gsl
+  - openblas
+  - openmpi
+  - mpi4py
+  - git
+  - gfortran
+  - cmake          # scikit-build / cmake-based builds
+  - ninja          # faster CMake backend for scikit-build
+  - scikit-build   # cmake-based build support (conda-forge)
+  - setuptools_scm # used by fsps metadata generation
+  - pip
+  - pip:
+    - scikit-build-core   # PEP-517 backend; pip-installed wheel is typical
+    - jupyterlab
+    - matplotlib
+    - astropy
+    - astro-sedpy
+    # Note: fsps is intentionally NOT listed here (we build it later with FFLAGS)
+    # Note: prospector dev install is done from local repo in the script
