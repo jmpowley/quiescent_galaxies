@@ -558,6 +558,7 @@ def main():
         "spec_lib" : spec_lib.decode("utf-8"),
         "dust_lib" : dust_lib.decode("utf-8"),
         }
+    print("FSPS libraries used:\n", fsps_libraries)
 
     # Add extra run kwargs
     # TODO: Change to add some of these from the command line
@@ -587,18 +588,12 @@ def main():
     print("Observations:\n", obs)
     print("Observations to fit:\n", new_obs)
 
-    # Fit model
-    start = time()
-    output = fit_model(new_obs, model, sps, lnprobfn=lnprobfn, **run_params)
-    end = time()
-    print(output)
-    print(f"Model fit in {end - start:.2f} seconds")
-
     # Build descriptive output strings
     # -- file name str
     file_str = __file__.rstrip(".py")
+    file_base = os.path.basename(file_str)
     # -- FSPS libraries str
-    fsps_str = isoc_lib.decode("utf-8") + spec_lib.decode("utf-8")
+    fsps_str = isoc_lib.decode("utf-8") + spec_lib.decode("utf-8").replace("_", "")
     # -- sampler str
     samp_str = run_params["nested_sampler"]
     # -- obs_str e.g. 'phot_prism_g235m'
@@ -613,11 +608,19 @@ def main():
     nuis_str = "T" if model_kwargs["add_nuisance"] else "F"
 
     # Prepare output
-    out_name = f"{file_str}_{fsps_str}_{samp_str}_{obs_str}_neb{neb_str}_smooth{smooth_str}_nuis{nuis_str}.h5"
-    out_dir = f"/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs/{file_str}_{fsps_str}"
+    out_name = f"{file_base}_{fsps_str}_{samp_str}_{obs_str}_neb{neb_str}_smooth{smooth_str}_nuis{nuis_str}.h5"
+    out_dir = os.path.join("/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs", 
+                           f"{file_base}_{fsps_str}")
+    os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, out_name)
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
+    print("Output path:\n", out_path)
+
+    # Fit model
+    start = time()
+    output = fit_model(new_obs, model, sps, lnprobfn=lnprobfn, **run_params)
+    end = time()
+    print(output)
+    print(f"Model fit in {end - start:.2f} seconds")
     
     # Save results
     writer.write_hdf5(out_path, run_params, model, new_obs,
