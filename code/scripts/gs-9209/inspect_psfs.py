@@ -53,25 +53,21 @@ nrs.filter = "F170LP"
 print("Band is", nrs.band)
 
 waves = nrs.get_IFU_wavelengths(nlambda=50)
-
 cube = nrs.calc_datacube(waves)
 
-print(cube.info(), print(type(cube)))
-
-# quickcube = nrs.calc_datacube_fast(waves)
-
+# Display STPSF
 index = 20
 stpsf.display_psf(cube, ext=3, cube_slice=index,
                     title=f'NRS IFU cube slice {index}, $\\lambda$={cube[0].header["WAVELN"+str(index)]*1e6:.4} micron')
 
-# Create figure
+# Inspect other PSFSs
+# -- create figure
 fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-
+# -- plot PSFs
 ax.plot(wave, psf_circ, label="Circular")
 ax.plot(wave, psf_major, label="Major axis")
 ax.plot(wave, psf_minor, label="Minor axis")
-
-# Prettify
+# -- prettify
 ax.set_xlabel(r"$\lambda_{\rm obs}~[\mu m]$", size=16)
 ax.set_ylabel(r"${\rm FWHM}(\lambda)~[{\rm arcsec}]$", size=16)
 ax.legend()
