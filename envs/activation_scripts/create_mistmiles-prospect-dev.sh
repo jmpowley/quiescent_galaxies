@@ -17,11 +17,8 @@ mamba activate "$ENV_NAME"
 echo "Active environment: $CONDA_DEFAULT_ENV"
 echo "Python location: $(which python)"
 
-# Install FSPS with flags
-export FFLAGS="-DMIST=1 -DMILES=1"
-echo "Installing fsps from source with FFLAGS=$FFLAGS ..."
-python -m pip install --no-binary fsps --no-build-isolation fsps -v
-unset FFLAGS
+# Install FSPS (stable version)
+python -m pip install fsps
 
 # Install prospector from local repo
 echo "Installing local prospector (editable): ${PROSPECTOR_LOCAL}"
