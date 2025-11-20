@@ -42,7 +42,7 @@ def _rebuild_wave_from_header(header):
     
     return wave
 
-def load_cutout_data(data_dir, data_name, data_ext, centre, width, height, psf_dir, psf_name, psf_ext, snr_limit, plot=False, **extras):
+def load_cutout_data(data_dir, data_name, data_ext, centre, width, height, psf_dir, psf_name, psf_ext, snr_limit, **extras):
     """
     Loads NIRCam cutouts
     """
@@ -52,13 +52,19 @@ def load_cutout_data(data_dir, data_name, data_ext, centre, width, height, psf_d
     hdul = fits.open(path)
 
     # Extract image data
-    im_in = hdul[data_ext].data
+    image_in = hdul[data_ext].data
     wht_in = hdul["WHT"].data
-    mask_in = np.zeros(im_in.shape)  # TODO: Change to mask_ext etc
+    # mask_in = np.zeros(image_in.shape)  # TODO: Change to mask_ext etc
+    
+    # Create mask
+    mask_in = np.zeros_like(image_in)
+    mask_in[image_in <= 0] = 1  # mask all negative flux pixels
+    # -- apply mask conditions to image
+    image_in[image_in <= 0] = 1
 
     # Impose SNR limit
     #sig = 0.01/np.sqrt(np.abs(wht)) + 0.1*np.sqrt(np.abs(im))
-    sig = (1 / snr_limit) * np.sqrt(np.abs(im_in))
+    sig = (1 / snr_limit) * np.sqrt(np.abs(image_in))
     
     # Extract subregion
     # -- find lower/upper bounds
@@ -70,13 +76,13 @@ def load_cutout_data(data_dir, data_name, data_ext, centre, width, height, psf_d
     y0 = ycen - halfh
     y1 = y0 + height
     # -- apply to images
-    im_crop  = im_in[y0:y1, x0:x1]
-    wht_crop = wht_in[y0:y1, x0:x1]
-    sig_crop = sig[y0:y1, x0:x1]
-    mask_crop= mask_in[y0:y1, x0:x1]
+    image_out  = image_in[y0:y1, x0:x1]
+    wht_out = wht_in[y0:y1, x0:x1]
+    sig_out = sig[y0:y1, x0:x1]
+    mask_out= mask_in[y0:y1, x0:x1]
 
     # load the PSF data
-    psf_path = os.path.join(psf_dir, psf_name)  # TODO: Change to/add in _resolve_path function
+    psf_path = _resolve_path(psf_dir, psf_name)
     psf_hdul = fits.open(psf_path)
     psf_in = fits.getdata(psf_path)
     # -- extract subregion (smaller than data)
@@ -86,26 +92,15 @@ def load_cutout_data(data_dir, data_name, data_ext, centre, width, height, psf_d
     px1 = px0 + (width - 2*n_pad)
     py0 = pcen - halfh + n_pad
     py1 = py0 + (height - 2*n_pad)
-    psf_crop = psf_in[py0:py1, px0:px1]
+    psf_out = psf_in[py0:py1, px0:px1]
     # psf_crop = psf_in[cen-18:cen+19, cen-18:cen+19]
     # -- normalise
-    psf_crop /= np.sum(psf_crop)  # normalise
-    psf_crop = psf_crop.astype(float)
+    psf_out /= np.sum(psf_out)  # normalise
+    psf_out = psf_out.astype(float)
 
-    # Plot data
-    if plot:
-        fig, ax = plot_image(im_crop, mask_crop, sig_crop, psf_crop)
-        plt.show()
+    return image_out, mask_out, sig_out, psf_out
 
-    # Check data
-    if check_input_data(data=im_crop, rms=sig_crop, psf=psf_crop, mask=mask_crop):
-        print("Data looks good!")
-    else:
-        print("Data looks bad!")
-
-    return im_crop, mask_crop, sig_crop, psf_crop
-
-def load_cube_data(data_dir, data_name, data_ext, wave_from_hdr, in_wave_units, out_wave_units, centre, width, height, wave_min, wave_max):
+def load_cube_data(data_dir, data_name, data_ext, wave_from_hdr, in_wave_units, out_wave_units, centre, width, height, psf_dir, psf_name, psf_ext, wave_min, wave_max):
 
     # TODO: Add in PSF for IFS data?
 
@@ -128,7 +123,6 @@ def load_cube_data(data_dir, data_name, data_ext, wave_from_hdr, in_wave_units, 
     # Convert wavelength units
     # TODO: Apply conversions
 
-
     wave_out = wave_in
     cube_out = cube_in
     err_out = err_in
@@ -145,8 +139,9 @@ def load_cube_data(data_dir, data_name, data_ext, wave_from_hdr, in_wave_units, 
         y0 = ycen - halfh
         y1 = y0 + height
         # -- apply to images
-        cube_out  = cube_out[:, y0:y1, x0:x1]
+        cube_out = cube_out[:, y0:y1, x0:x1]
         err_out = err_out[:, y0:y1, x0:x1]
+        psf_out = err_out = err_out[:, y0:y1, x0:x1]
         nlam, ny, nx = cube_out.shape  # update shape
 
     # Crop wavelength axis
@@ -157,4 +152,22 @@ def load_cube_data(data_dir, data_name, data_ext, wave_from_hdr, in_wave_units, 
         err_out  = err_out[wave_mask, :, :]
         nlam, ny, nx = cube_out.shape  # update shape
 
-    return wave_out, cube_out, err_out
+    # Load PSF data
+    psf_path = _resolve_path(psf_dir, psf_name)
+    psf_hdul = fits.open(psf_path)
+    psf_in = hdul[psf_ext].data
+    # -- extract subregion (smaller than data)
+    pcen = int(0.5*psf_in.shape[0])
+    n_pad = 1
+    px0 = pcen - halfw + n_pad
+    px1 = px0 + (width - 2*n_pad)
+    py0 = pcen - halfh + n_pad
+    py1 = py0 + (height - 2*n_pad)
+    psf_out = psf_in[py0:py1, px0:px1]
+    # -- normalise along each spectral axis
+    psf_norm = psf_out.copy()
+    for n in range(nlam):
+        psf_norm[n, :, :] = psf_out[n, :, :] / np.sum(psf_out[n, :, :])
+    psf_out = psf_norm.astype(float)
+
+    return wave_out, cube_out, err_out, psf_out
