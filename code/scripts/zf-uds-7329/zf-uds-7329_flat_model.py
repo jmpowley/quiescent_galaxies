@@ -5,6 +5,7 @@ import numpy as np
 
 from astropy import cosmology
 from sedpy.observate import load_filters
+import fsps
 
 from prospect.sources.galaxy_basis import CSPSpecBasis, FastStepBasis
 from prospect.observation import Photometry, Spectrum, PolyOptCal
@@ -178,7 +179,7 @@ def build_obs(obs_kwargs, **extras):
                                                                                             prism_err,
                                                                                             prism_mask,
                                                                                             prism_res,
-                                                                                            zred=3.2,  # TODO: Change to variable?
+                                                                                            zred=3.2,
                                                                                             wave_lo=2000,
                                                                                             wave_hi=7000,
                                                                                             )
@@ -434,110 +435,6 @@ def build_all(obs_kwargs, model_kwargs, **extras):
 # -------------
 def main():
 
-    # obs_kwargs = {
-
-    #     "phot_kwargs" : {
-    #         "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/photometry",
-    #         "name" : "007329",
-    #         "data_ext" : "DATA",
-    #         "mask_ext" : "VALID",
-    #         "in_flux_units" : "magnitude",
-    #         "out_flux_units" : "maggie",
-    #         "snr_limit" : 20,
-    #         "return_none" : False,
-    #         "prefix" : "phot",
-    #         "add_jitter" : True,
-    #         "include_outliers" : True,
-    #         "fit_obs" : True,
-    #     },
-
-    #     "prism_kwargs" : {
-    #         "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-    #         "name" : "007329",
-    #         "version" : "v3.1",
-    #         "nod" : "extr5",
-    #         "data_ext" : "DATA",
-    #         "mask_ext" : None,
-    #         "in_wave_units" : "si",
-    #         "out_wave_units" : "A",
-    #         "in_flux_units" : "si",
-    #         "out_flux_units" : "maggie",
-    #         "rescale_factor" : 1.86422,
-    #         "snr_limit" : 20,
-    #         "return_none" : False,
-    #         "prefix" : "prism",
-    #         "add_jitter" : True,
-    #         "include_outliers" : True,
-    #         "fit_obs" : True,
-    #     },
-
-    #     "grat1_kwargs" : {
-    #         "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-    #         "name" : "007329",
-    #         "grating" : "g140m",
-    #         "filter" : "f100lp",
-    #         "version" : None,
-    #         "nod" : None,
-    #         "data_ext" : "DATA",
-    #         "mask_ext" : "VALID",
-    #         "in_wave_units" : "um",
-    #         "out_wave_units" : "A",
-    #         "in_flux_units" : "ujy",
-    #         "out_flux_units" : "maggie",
-    #         "rescale_factor" : 1.86422,
-    #         "snr_limit" : 20,
-    #         "return_none" : False,
-    #         "prefix" : "grat1",
-    #         "add_jitter" : True,
-    #         "include_outliers" : True,
-    #         "fit_obs" : False,
-    #     },
-
-    #     "grat2_kwargs" : {
-    #         "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-    #         "name" : "007329",
-    #         "grating" : "g235m",
-    #         "filter" : "f170lp",
-    #         "version" : None,
-    #         "nod" : None,
-    #         "data_ext" : "DATA",
-    #         "mask_ext" : "VALID",
-    #         "in_wave_units" : "um",
-    #         "out_wave_units" : "A",
-    #         "in_flux_units" : "ujy",
-    #         "out_flux_units" : "maggie",
-    #         "rescale_factor" : 1.86422,
-    #         "snr_limit" : 20,
-    #         "return_none" : False,
-    #         "prefix" : "grat2",
-    #         "add_jitter" : True,
-    #         "include_outliers" : True,
-    #         "fit_obs" : True,
-    #     },
-
-    #     "grat3_kwargs" : {
-    #         "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-    #         "name" : "007329",
-    #         "grating" : "g395m",
-    #         "filter" : "f290lp",
-    #         "version" : None,
-    #         "nod" : None,
-    #         "data_ext" : "DATA",
-    #         "mask_ext" : "VALID",
-    #         "in_wave_units" : "um",
-    #         "out_wave_units" : "A",
-    #         "in_flux_units" : "ujy",
-    #         "out_flux_units" : "maggie",
-    #         "rescale_factor" : 1.86422,
-    #         "snr_limit" : 20,
-    #         "return_none" : False,
-    #         "prefix" : "grat3",
-    #         "add_jitter" : True,
-    #         "include_outliers" : True,
-    #         "fit_obs" : False,
-    #     },
-    # }
-
     obs_kwargs = {
 
         "phot_kwargs" : {
@@ -652,9 +549,15 @@ def main():
 
     # Load all
     obs, model, sps = build_all(**run_params)
-    # print("obs:", obs)
-    # print("model:", model)
-    # print("sps:", sps)
+
+    # Load FSPS libraries
+    sp = fsps.StellarPopulation()
+    isoc_lib, spec_lib, dust_lib = sp.libraries
+    fsps_libraries = {
+        "isoc_lib" : isoc_lib.decode("utf-8"),
+        "spec_lib" : spec_lib.decode("utf-8"),
+        "dust_lib" : dust_lib.decode("utf-8"),
+        }
 
     # Add extra run kwargs
     # TODO: Change to add some of these from the command line
@@ -665,17 +568,12 @@ def main():
     run_params["optimize"] = False
     run_params["dynesty"] = False
     run_params["nested_sampler"] = "nautilus"
-    # -- optimize kwargs
-    # run_params["min_method"] = "lm"
-    # -- emcee kwargs
-    # run_params["nwalkers"] = 128  # numebr of walkers
-    # run_params["niter"] = 512  # number of iterations of the MCMC sampling
-    # run_params["nburn"] = [16, 32, 64]  # number of iterations in each round of burn-in
-    # -- dynesty kwargs
     # -- nautilus kwargs
     run_params["verbose"] = True
     run_params["n_live"] = 1000  # TODO: change to take as CL argument
     run_params["discard_exploration"] = True
+    # -- FSPS libraries
+    run_params["fsps_libraries"] = fsps_libraries
 
     # Map obs list to explicit names
     expected_names = obs_kwargs.keys()
@@ -697,6 +595,12 @@ def main():
     print(f"Model fit in {end - start:.2f} seconds")
 
     # Build descriptive output strings
+    # -- file name str
+    file_str = __file__.rstrip(".py")
+    # -- FSPS libraries str
+    fsps_str = isoc_lib.decode("utf-8") + spec_lib.decode("utf-8")
+    # -- sampler str
+    samp_str = run_params["nested_sampler"]
     # -- obs_str e.g. 'phot_prism_g235m'
     obs_str_list = []
     for key in obs_kwargs.keys():
@@ -707,17 +611,19 @@ def main():
     neb_str = "T" if model_kwargs["add_nebular"] else "F"
     smooth_str = "T" if model_kwargs["smooth_spectra"] else "F"
     nuis_str = "T" if model_kwargs["add_nuisance"] else "F"
- 
-    # Save results
-    out_name = f"zf-uds-7329_flat_model_nautlius_{obs_str}_neb{neb_str}_smooth{smooth_str}_nuis{nuis_str}.h5"
-    out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs"
+
+    # Prepare output
+    out_name = f"{file_str}_{fsps_str}_{samp_str}_{obs_str}_neb{neb_str}_smooth{smooth_str}_nuis{nuis_str}.h5"
+    out_dir = f"/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs/{file_str}_{fsps_str}"
     out_path = os.path.join(out_dir, out_name)
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+    
+    # Save results
     writer.write_hdf5(out_path, run_params, model, new_obs,
                         sampling_result=output["sampling"],
-                        # optimize_result_tuple=output["optimization"],
-                        sps=sps
+                        sps=sps,
                     )
-    
     print(f"Output saved to {out_path}")
 
 # --------------
