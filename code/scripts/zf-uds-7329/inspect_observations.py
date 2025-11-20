@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 from conversions import convert_wave_um_to_m, convert_wave_A_to_um, convert_flux_ujy_to_jy, convert_flux_jy_to_ujy, convert_flux_jy_to_cgs, convert_flux_jy_to_maggie, convert_wave_A_to_m, convert_wave_m_to_A
 from loading import load_photometry_data, load_prism_data, load_grating_data
@@ -95,7 +96,8 @@ def plot_spectra_phot_1panel(spec, phot):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12, 5))
 
     # Colors
-    colors = [f"C{i}" for i in range(0, len(phot_waveffs_um))]
+    cmap = cm.get_cmap("rainbow")
+    colors = [cmap(i/len(phot_waveffs_um)) for i in range(len(phot_waveffs_um))]
 
     # Plot spectra
     for (spec_wave_um, spec_flux_cgs, spec_err_cgs, spec_name) in zip(spec_waves_um, spec_fluxes_cgs, spec_errs_cgs, spec_names):

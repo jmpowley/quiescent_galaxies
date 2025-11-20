@@ -3,6 +3,7 @@ from collections import defaultdict
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 from sedpy.observate import load_filters
 
@@ -121,6 +122,7 @@ def plot_voronoi_binned_spectra(wave, binned_cube, binned_cube_err):
         ax.set_xlabel(r"$\lambda_{\rm obs}~[\mu m]$", size=16)
         ax.set_ylabel(r"$f_\lambda~[~10^{-20}$ erg s$^{-1}$ cm$^{-2}$ Å$^{-1}]$", size=16)
         ax.text(0.03, 0.97, f"Voronoi bin {i}", transform=ax.transAxes, va="top", ha="left", size=14)
+        ax.tick_params(axis='both' , direction='in')
 
     plt.tight_layout()
 
@@ -146,12 +148,17 @@ def plot_voronoi_binned_spectra_with_filters(wave, binned_cube, binned_cube_err,
         ax.plot(wave, binned_spec, color="k")
         ax.fill_between(wave, binned_spec-binned_err, binned_spec+binned_err, color="k", alpha=0.3)
 
+        ymax = np.nanpercentile(binned_spec, 99.9)
+
         # Plot filters
-        colors = [f"C{i}" for i in range(0, len(sedpy_filters))]
+        # colors = [f"C{i}" for i in range(0, len(sedpy_filters))]
+        cmap = cm.get_cmap("rainbow")
+        colors = [cmap(i/len(sedpy_filters)) for i in range(len(sedpy_filters))]
+
         for (f, color) in zip(sedpy_filters, colors):
             filter_wave = convert_wave_A_to_um(f.wavelength)
             trans_norm = f.transmission / np.max(f.transmission)  # normalise
-            trans_scale = trans_norm * 0.2 * np.nanmax(binned_spec)  # scale wrt. binned spectra
+            trans_scale = trans_norm * 0.2 * ymax  # scale wrt. ymax
             name = f.nick.lstrip("jwst_").upper()  # nice name (e.g., F444W)
             ax.fill_between(filter_wave, 0, trans_scale, color=color, alpha=0.3)
             ax.fill_between(filter_wave, np.nan, np.nan, color=color, label=name)
@@ -159,9 +166,11 @@ def plot_voronoi_binned_spectra_with_filters(wave, binned_cube, binned_cube_err,
 
         # Prettify
         ax.set_xlim(wave.min(), wave.max())
+        ax.set_ylim(0, ymax)
         ax.set_xlabel(r"$\lambda_{\rm obs}~[\mu m]$", size=16)
         ax.set_ylabel(r"$f_\lambda~[~10^{-20}$ erg s$^{-1}$ cm$^{-2}$ Å$^{-1}]$", size=16)
         ax.text(0.03, 0.97, f"Voronoi bin {i}", transform=ax.transAxes, va="top", ha="left", size=14)
+        ax.tick_params(axis='both' , direction='in')
 
         if i == 0:
             ax.legend(ncols=len(sedpy_filters)//2, bbox_to_anchor=[0, 1], loc="lower left")
@@ -183,6 +192,9 @@ cube_kwargs = {
     "height" : None,
     "wave_min" : None,
     "wave_max" : None,
+    "psf_dir" : None,
+    "psf_name" : None,
+    "psf_ext" : None,
 }
 wave, cube, cube_err = load_cube_data(**cube_kwargs)
 
