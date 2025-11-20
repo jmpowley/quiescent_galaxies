@@ -155,7 +155,7 @@ def load_cube_data(data_dir, data_name, data_ext, wave_from_hdr, in_wave_units, 
     # Load PSF data
     psf_path = _resolve_path(psf_dir, psf_name)
     psf_hdul = fits.open(psf_path)
-    psf_in = hdul[psf_ext].data
+    psf_in = psf_hdul[psf_ext].data
     # -- extract subregion (smaller than data)
     pcen = int(0.5*psf_in.shape[0])
     n_pad = 1
