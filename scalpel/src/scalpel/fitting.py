@@ -3,6 +3,8 @@ import os
 import numpy as np
 from sedpy.observate import load_filters
 
+import matplotlib.pyplot as plt
+
 import jax
 import jax.numpy as jnp
 from jax.random import (
@@ -15,7 +17,8 @@ from pysersic.priors import autoprior, SourceProperties
 from pysersic import loss
 
 from .loading import load_cutout_data, load_cube_data
-from .plotting import call_plot_residual
+from .plotting import call_plot_residual, call_plot_image, make_plots
+from .helpers import return_linked_param_at_wv, return_const_param
 
 def _set_priors(image, mask, profile_type, sky_type, prior_dict):
     """Sets priors for model in PySersic"""
@@ -25,16 +28,22 @@ def _set_priors(image, mask, profile_type, sky_type, prior_dict):
     # prior = props.generate_prior(profile_type=profile_type, sky_type=sky_type)
     prior = autoprior(image=image, profile_type=profile_type, mask=mask, sky_type=sky_type)
 
-    # Set uniform priors from dict
+    # Set priors from config dict
     for prior_type, prior_type_dict in prior_dict.items():
+        # -- uniform priors
         if prior_type == "uniform":
             for param, range in prior_type_dict.items():
                 lo, hi = range
                 prior.set_uniform_prior(param, lo, hi)
+        # -- gaussian priors
+        if prior_type == "gaussian":
+            for param, gauss in prior_type_dict.items():
+                loc, std = gauss
+                prior.set_gaussian_prior(param, loc, std)
 
     return prior
 
-def fit_band(image, mask, sig, psf, prior, loss_func, method, rkey, verbose):
+def fit_band(data, mask, rms, psf, prior, loss_func, method, rkey, verbose):
     """Fits individual band"""
 
     if verbose:
@@ -48,7 +57,7 @@ def fit_band(image, mask, sig, psf, prior, loss_func, method, rkey, verbose):
     loss_func = loss_map[loss_func]
 
     # Setup fitter
-    fitter = FitSingle(data=image, rms=sig ,mask=mask, psf=psf, prior=prior, loss_func=loss_func)
+    fitter = FitSingle(data=data, rms=rms ,mask=mask, psf=psf, prior=prior, loss_func=loss_func)
 
     # Estimate posterior
     rkey, rkey_est = jax.random.split(rkey, 2) # use different random number key for each run
@@ -79,7 +88,7 @@ def fit_bands_independent(cutout_kwargs, prior_dict, profile_type, sky_type, los
             print("------------------------")
             print(f"Independent fit of {filter.upper()}")
 
-        # Load data
+        # Load cutout data
         image, mask, sig, psf = load_cutout_data(**filter_kwargs)
 
         # Set priors
@@ -87,7 +96,7 @@ def fit_bands_independent(cutout_kwargs, prior_dict, profile_type, sky_type, los
 
         # Fit band
         rkey, rkey_fit = jax.random.split(rkey)
-        fitter, result = fit_band(image=image, mask=mask, sig=sig, psf=psf, prior=prior, loss_func=loss_func, method=method, rkey=rkey_fit, verbose=verbose)
+        fitter, result = fit_band(data=image, mask=mask, rms=sig, psf=psf, prior=prior, loss_func=loss_func, method=method, rkey=rkey_fit, verbose=verbose)
 
         # Save results
         out_name = f"{profile_type}_fit_{filter}.asdf"
@@ -95,6 +104,10 @@ def fit_bands_independent(cutout_kwargs, prior_dict, profile_type, sky_type, los
         result.save_result(out_path)
 
         # Make plots
+        # -- data
+        fig = call_plot_image(image, mask, sig, psf)
+        fig_name = f"{profile_type}_{filter}_data.pdf"
+        fig.savefig(os.path.join(fig_dir, fig_name))
         # -- residual
         fig = call_plot_residual(fitter, image, mask, psf, profile_type)
         fig_name = f"{profile_type}_{filter}_residual.pdf"
@@ -103,6 +116,8 @@ def fit_bands_independent(cutout_kwargs, prior_dict, profile_type, sky_type, los
         fig = fitter.sampling_results.corner(color='C0') 
         fig_name = f"{profile_type}_{filter}_corner.pdf"
         fig.savefig(os.path.join(fig_dir, fig_name))
+
+        plt.show()
 
     return fitter, result
 
@@ -130,17 +145,18 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
         print("filter:", filter.upper())
         sedpy_filter = load_filters(["jwst_" + filter])[0]
 
-        # Load data
+        # Load cutout data
         image, mask, sig, psf = load_cutout_data(**filter_kwargs)
 
         # Create PySersic priors
         prior = _set_priors(image=image, mask=mask, profile_type=profile_type, sky_type=sky_type, prior_dict=in_prior_dict)
+        print(prior)
 
         # Fit band
         rkey, rkey_fit = jax.random.split(rkey)
-        fitter, result = fit_band(image=image, 
+        fitter, result = fit_band(data=image, 
                                   mask=mask, 
-                                  sig=sig, 
+                                  rms=sig, 
                                   psf=psf, 
                                   prior=prior, 
                                   loss_func=loss_func, 
@@ -155,14 +171,20 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
         result.save_result(out_path)
 
         # Make plots
-        # -- residual
-        fig = call_plot_residual(fitter, image, mask, psf, profile_type)
-        fig_name = f"{profile_type}_{method}_{filter}_residual.pdf"
-        fig.savefig(os.path.join(fig_dir, fig_name))
-        # -- corner
-        fig = fitter.sampling_results.corner(color='C0')
-        fig_name = f"{profile_type}_{method}_{filter}_corner.pdf"
-        fig.savefig(os.path.join(fig_dir, fig_name))
+        # # -- data
+        # fig = call_plot_image(image, mask, sig, psf)
+        # fig_name = f"{profile_type}_{filter}_data.pdf"
+        # fig.savefig(os.path.join(fig_dir, fig_name))
+        # # -- residual
+        # fig = call_plot_residual(fitter, image, mask, psf, profile_type)
+        # fig_name = f"{profile_type}_{filter}_residual.pdf"
+        # fig.savefig(os.path.join(fig_dir, fig_name))
+        # # -- corner
+        # fig = fitter.sampling_results.corner(color='C0') 
+        # fig_name = f"{profile_type}_{filter}_corner.pdf"
+        # fig.savefig(os.path.join(fig_dir, fig_name))
+
+        make_plots(fitter, image, mask, sig, psf, profile_type=profile_type, filter=filter, fig_dir=fig_dir)
 
         # Save to lists/dicts
         filters.append(filter)
@@ -188,10 +210,6 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
     if invert_wave:
         waveffs = 1 / waveffs
         wv_to_save = 1 / wv_to_save
-
-    print(fitter_dict.keys())
-    print(filters, len(filters))
-    print(waveffs, np.size(waveffs))
 
     # Create MultiFitter object
     # -- polynomial
@@ -229,3 +247,61 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
     results_dict = results.retrieve_med_std()
 
     return results_dict
+
+def fit_cube(cube_kwargs, results_dict, linked_params, const_params, profile_type, sky_type, loss_func, method, seed, verbose, **extras):
+
+    return
+
+    rkey = PRNGKey(seed)
+
+    # Load cube data
+    wave, cube, cube_err = load_cube_data(**cube_kwargs)
+    nlam, ny, nx = cube.shape
+
+    # Load values for parameters
+    linked_params_dict = {p: return_linked_param_at_wv(results_dict, param=p, return_std=True) for p in linked_params}
+    const_params_dict = {p: return_const_param(results_dict, param=p, return_std=True) for p in const_params}
+
+    # 
+    bulge_fraction = []
+
+    # Loop over each wavelength slice
+    for i in range(nlam):
+        slice = cube[i, :, :]
+        slice_err = cube_err[i, :, :]
+
+        # Build Gaussian priors for this slice using medians and stds
+        # -- add linked parameters
+        slice_gaussian_priors = {}
+        for param, (meds, stds) in linked_params_dict.items():
+            # -- do not limit f_1
+            if profile_type == "sersic_exp" and param != "f_1":
+                slice_gaussian_priors[param] = (meds[i], stds[i])
+        # -- add constant parameters
+        slice_const_priors = {}
+        for param, (meds, stds) in const_params_dict.items():
+            slice_const_priors[param] = (meds, stds)
+        # -- combine into a dict
+        slice_prior_dict = {
+            "uniform" : {"f_1" : (0.0, 1.0)},
+            "gaussian": {**slice_const_priors, **slice_gaussian_priors},
+        }
+        # -- set priors
+        slice_prior = _set_priors(image=slice, mask=mask, profile_type=profile_type, sky_type=sky_type, prior_dict=slice_prior_dict)
+
+        # Fit individual slice
+        rkey, rkey_fit = jax.random.split(rkey)
+        fitter, result = fit_band(data=slice, 
+                                  mask=mask, 
+                                  rms=slice_err, 
+                                  psf=psf, 
+                                  prior=slice_prior, 
+                                  loss_func=loss_func, 
+                                  method=method, 
+                                  rkey=rkey_fit, 
+                                  verbose=verbose, 
+                                  )
+        
+        # Add bulge fraction information to list
+        
+    return fitter, result
