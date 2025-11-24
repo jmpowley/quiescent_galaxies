@@ -58,9 +58,10 @@ def load_cutout_data(data_dir, data_name, data_ext, centre, width, height, psf_d
     
     # Create mask
     mask_in = np.zeros_like(image_in)
-    mask_in[image_in <= 0] = 1  # mask all negative flux pixels
+    subzero = image_in <= 0
+    mask_in[subzero] = 1  # mask all negative flux pixels
     # -- apply mask conditions to image
-    image_in[image_in <= 0] = 1
+    image_in[subzero] = 1e-5  # small nonzero value
 
     # Impose SNR limit
     #sig = 0.01/np.sqrt(np.abs(wht)) + 0.1*np.sqrt(np.abs(im))
@@ -144,30 +145,38 @@ def load_cube_data(data_dir, data_name, data_ext, wave_from_hdr, in_wave_units, 
         psf_out = err_out = err_out[:, y0:y1, x0:x1]
         nlam, ny, nx = cube_out.shape  # update shape
 
+    # Load PSF data
+    if all(x is not None for x in (psf_dir, psf_name, psf_ext)):
+        psf_path = _resolve_path(psf_dir, psf_name)
+        psf_hdul = fits.open(psf_path)
+        psf_in = psf_hdul[psf_ext].data
+        # -- extract subregion (smaller than data)
+        pcen = int(0.5*psf_in.shape[0])
+        n_pad = 1
+        px0 = pcen - halfw + n_pad
+        px1 = px0 + (width - 2*n_pad)
+        py0 = pcen - halfh + n_pad
+        py1 = py0 + (height - 2*n_pad)
+        psf_out = psf_in[py0:py1, px0:px1]
+        # -- normalise along each spectral axis
+        psf_norm = psf_out.copy()
+        for n in range(nlam):
+            psf_norm[n, :, :] = psf_out[n, :, :] / np.sum(psf_out[n, :, :])
+        psf_out = psf_norm.astype(float)
+
     # Crop wavelength axis
     if wave_min is not None and wave_max is not None:
         wave_mask = (wave_out > wave_min) & (wave_out < wave_max)
         wave_out = wave_out[wave_mask]
         cube_out = cube_out[wave_mask, :, :]
         err_out  = err_out[wave_mask, :, :]
+        # -- crop PSF (assumes same shape as cube)
+        if all(x is not None for x in (psf_dir, psf_name, psf_ext)):
+            psf_out = psf_out[wave_mask, :, :]
         nlam, ny, nx = cube_out.shape  # update shape
 
-    # Load PSF data
-    psf_path = _resolve_path(psf_dir, psf_name)
-    psf_hdul = fits.open(psf_path)
-    psf_in = psf_hdul[psf_ext].data
-    # -- extract subregion (smaller than data)
-    pcen = int(0.5*psf_in.shape[0])
-    n_pad = 1
-    px0 = pcen - halfw + n_pad
-    px1 = px0 + (width - 2*n_pad)
-    py0 = pcen - halfh + n_pad
-    py1 = py0 + (height - 2*n_pad)
-    psf_out = psf_in[py0:py1, px0:px1]
-    # -- normalise along each spectral axis
-    psf_norm = psf_out.copy()
-    for n in range(nlam):
-        psf_norm[n, :, :] = psf_out[n, :, :] / np.sum(psf_out[n, :, :])
-    psf_out = psf_norm.astype(float)
-
-    return wave_out, cube_out, err_out, psf_out
+    # Return depending if PSF supplied or not
+    if all(x is not None for x in (psf_dir, psf_name, psf_ext)):
+        return wave_out, cube_out, err_out, psf_out
+    else:
+        return wave_out, cube_out, err_out
