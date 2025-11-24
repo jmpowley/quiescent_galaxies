@@ -4,7 +4,7 @@ import asdf
 
 from .helpers import return_filters, return_wv_to_save
 
-def save_photometry_fit_results_to_asdf(results_dict, prior_dict, cutout_kwargs, cube_kwargs, fit_kwargs):
+def save_simultaneous_fit_results_to_asdf(results_dict, prior_dict, cutout_kwargs, cube_kwargs, fit_kwargs):
     """Write results and other information to an asdf file"""
 
     # Return filters
@@ -24,12 +24,17 @@ def save_photometry_fit_results_to_asdf(results_dict, prior_dict, cutout_kwargs,
 
     # Build output string
     out_dir = fit_kwargs["out_dir"]
+    fit_type = fit_kwargs["fit_type"]
     profile_str = fit_kwargs["profile_type"]
     method_str = fit_kwargs["method"]
-    multi_str = fit_kwargs["multifitter"]
-    fit_str = f"sim_{method_str}_{multi_str}" if fit_kwargs["fit_type"] == "simultaneous" else "ind_{method_str}"
+    multifit_str = fit_kwargs["multifitter"]
+    multifit_kwargs = fit_kwargs["multifit_kwargs"]
+    if multifit_str == "poly":
+        multifit_str = multifit_str + str(multifit_kwargs["poly_order"])
+    elif multifit_str == "bspline":
+        multifit_str = multifit_str + str(multifit_kwargs["N_knots"])
     # -- compile
-    out_name = f"{profile_str}_{fit_str}_fit_results.asdf"
+    out_name = f"{profile_str}_{method_str}_{multifit_str}_simfit_results.asdf"
 
     # Save results
     af = asdf.AsdfFile(tree)
