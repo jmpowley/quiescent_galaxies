@@ -1,5 +1,5 @@
 from .fitting import fit_bands_independent, fit_bands_simultaneous, fit_cube
-from .writing import save_photometry_fit_results_to_asdf
+from .writing import save_simultaneous_fit_results_to_asdf
 
 class Scalpel:
     """Performs bulge-disc decomposition of IFU cubes"""
@@ -41,7 +41,7 @@ class Scalpel:
 
         # Fit photometric bands to obtain structural parameters
         results_dict = self.fit_bands(cutout_kwargs=cutout_kwargs, cube_kwargs=cube_kwargs, prior_dict=prior_dict, fit_kwargs=fit_kwargs)
-        save_photometry_fit_results_to_asdf(results_dict, prior_dict, cutout_kwargs, cube_kwargs, fit_kwargs)
+        save_simultaneous_fit_results_to_asdf(results_dict, prior_dict, cutout_kwargs, cube_kwargs, fit_kwargs)
 
         # Extract structural components from results
         self.fit_cube(cube_kwargs=cube_kwargs, results_dict=results_dict, fit_kwargs=fit_kwargs)
