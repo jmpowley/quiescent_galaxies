@@ -132,35 +132,43 @@ def return_joint_fit_medians_at_filter(joint_tree, params, filter, return_list :
         else:
             return param_medians
     
-def return_median_model_from_individual_tree(tree, profile_type, return_image : bool, return_residual : bool):
+def return_median_model_from_individual_tree(tree, profile_type, use_image_flux, return_residual : bool):
 
     # Load data
     input_data = tree["input_data"]
     image = np.asarray(input_data["image"])
+    mask = np.asarray(input_data["mask"])
     psf = np.asarray(input_data["psf"]).astype(np.float32)  # recast as numpy
-    
+
     # Calculate medians from posterior samples
     posterior = tree["posterior"]
     param_medians = {key : np.nanmedian(val) for key, val in posterior.items()}
 
+    # Create theta vector
+    theta = param_medians.copy()
+    # -- add flux
+    if use_image_flux:
+        flux = np.nansum(image[mask])  # apply mask
+        theta["flux"] = flux
+
     # Render model and residual
     renderer = HybridRenderer(im_shape=image.shape, pixel_PSF=psf)
-    median_model = np.asarray(renderer.render_source(param_medians, profile_type=profile_type))
+    median_model = np.asarray(renderer.render_source(params=theta, profile_type=profile_type))
     residual = image - median_model
 
-    # Optionally return image and residual
-    if return_image:
-        if return_residual:
-            return median_model, image, residual
-        else:
-            return median_model, image
+    # Optionally return residual
+    if return_residual:
+        return median_model, residual
     else:
-        if return_residual:
-            return median_model, residual
-        else:
-            return median_model
+        return median_model
 
-def return_median_model_from_joint_tree(joint_tree, individual_tree, profile_type, filter, return_image, return_residual):
+def return_median_model_from_joint_tree(joint_tree, individual_tree, profile_type, filter, use_image_flux, return_residual : bool):
+
+    # Load data
+    input_data = individual_tree["input_data"]
+    image = np.asarray(input_data["image"])
+    mask = np.asarray(input_data["mask"])
+    psf = np.asarray(input_data["psf"]).astype(np.float32)  # recast as numpy
 
     # Extract joint fit variables
     joint_results_dict = joint_tree["results_dict"]
@@ -178,24 +186,20 @@ def return_median_model_from_joint_tree(joint_tree, individual_tree, profile_typ
             param_median = return_linked_param_at_filter(joint_results_dict, param=param, filter=filter, return_std=False)
         param_medians[param] = param_median
 
-    # Load data
-    input_data = individual_tree["input_data"]
-    image = np.asarray(input_data["image"])
-    psf = np.asarray(input_data["psf"]).astype(np.float32)  # recast as numpy
+    # Create theta vector
+    theta = param_medians.copy()
+    # -- add flux
+    if use_image_flux:
+        flux = np.nansum(image[mask])  # apply mask
+        theta["flux"] = flux
 
     # Render model and residual
     renderer = HybridRenderer(im_shape=image.shape, pixel_PSF=psf)
-    median_model = np.asarray(renderer.render_source(param_medians, profile_type=profile_type))
+    median_model = np.asarray(renderer.render_source(params=theta, profile_type=profile_type))
     residual = image - median_model
 
-    # Optionally return image and residual
-    if return_image:
-        if return_residual:
-            return median_model, image, residual
-        else:
-            return median_model, image
+    # Optionally return residual
+    if return_residual:
+        return median_model, residual
     else:
-        if return_residual:
-            return median_model, residual
-        else:
-            return median_model
+        return median_model
