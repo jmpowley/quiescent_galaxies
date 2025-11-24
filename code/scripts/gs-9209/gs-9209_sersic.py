@@ -250,15 +250,38 @@ config = {
         "loss_func" : "student_t",
         "method" : "mcmc",
         "multifitter" : "bspline",
+        "multifit_kwargs" : {
+            "N_knots" : 5,
+        },
         "use_cube_wave" : False,
         "invert_wave" : False,
         "seed" : 1000,
         "verbose" : True,
-        "linked_params" : ["n", "ellip", "r_eff", "flux"],
+        "linked_params" : ["n", "ellip", "r_eff"],
         "const_params" : ["xc", "yc", "theta"],
-        "out_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/gs-9209_sersic",
-        "fig_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/gs-9209_sersic",
+        "out_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/scalpel_outputs/gs-9209_sersic",
+        "fig_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/scalpel_outputs/gs-9209_sersic",
     },
+
+    # "fit_kwargs" : {
+    #     "fit_type" : "simultaneous",
+    #     "profile_type" : "sersic",
+    #     "sky_type" : "none",
+    #     "loss_func" : "student_t",
+    #     "method" : "mcmc",
+    #     "multifitter" : "poly",
+    #     "multifit_kwargs" : {
+    #         "poly_order" : 3,
+    #     },
+    #     "use_cube_wave" : False,
+    #     "invert_wave" : False,
+    #     "seed" : 1000,
+    #     "verbose" : True,
+    #     "linked_params" : ["n", "ellip", "r_eff"],
+    #     "const_params" : ["xc", "yc", "theta"],
+    #     "out_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/scalpel_outputs/gs-9209_sersic",
+    #     "fig_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/scalpel_outputs/gs-9209_sersic",
+    # },
 }
 
 # Create Scalpel object

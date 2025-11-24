@@ -121,7 +121,7 @@ def fit_bands_independent(cutout_kwargs, prior_dict, profile_type, sky_type, los
 
     return fitter, result
 
-def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_params, const_params, profile_type, sky_type, loss_func, method, multifitter, use_cube_wave, invert_wave, seed, verbose, out_dir, fig_dir, **extras):
+def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_params, const_params, profile_type, sky_type, loss_func, method, multifitter, multifit_kwargs, use_cube_wave, invert_wave, seed, verbose, out_dir, fig_dir, **extras):
     
     rkey = PRNGKey(seed)
 
@@ -171,19 +171,6 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
         result.save_result(out_path)
 
         # Make plots
-        # # -- data
-        # fig = call_plot_image(image, mask, sig, psf)
-        # fig_name = f"{profile_type}_{filter}_data.pdf"
-        # fig.savefig(os.path.join(fig_dir, fig_name))
-        # # -- residual
-        # fig = call_plot_residual(fitter, image, mask, psf, profile_type)
-        # fig_name = f"{profile_type}_{filter}_residual.pdf"
-        # fig.savefig(os.path.join(fig_dir, fig_name))
-        # # -- corner
-        # fig = fitter.sampling_results.corner(color='C0') 
-        # fig_name = f"{profile_type}_{filter}_corner.pdf"
-        # fig.savefig(os.path.join(fig_dir, fig_name))
-
         make_plots(fitter, image, mask, sig, psf, profile_type=profile_type, filter=filter, fig_dir=fig_dir)
 
         # Save to lists/dicts
@@ -220,7 +207,7 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
                                     linked_params=linked_params,
                                     const_params=const_params,
                                     wv_to_save=wv_to_save,
-                                    poly_order=2,
+                                    **multifit_kwargs,
                                     )
     # -- b-spline
     elif multifitter == "bspline":
@@ -230,9 +217,7 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
                                     linked_params=linked_params,
                                     const_params=const_params,
                                     wv_to_save=wv_to_save,
-                                    N_knots=4,
-                                    spline_k=2,
-                                    pad_knots=True,
+                                    **multifit_kwargs,
                                     )
     
     # Estimate posterior

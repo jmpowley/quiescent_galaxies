@@ -244,6 +244,26 @@ config = {
         "n" : (2.0, 4.5),  # Sersic index of the central component
     },
 
+    # "fit_kwargs" : {
+    #     "fit_type" : "simultaneous",
+    #     "profile_type" : "sersic_exp",
+    #     "sky_type" : "none",
+    #     "loss_func" : "student_t",
+    #     "method" : "mcmc",
+    #     "multifitter" : "bspline",
+    #     "multifit_kwargs" : {
+    #         "N_knots" : 4,
+    #     },
+    #     "use_cube_wave" : False,
+    #     "invert_wave" : False,
+    #     "seed" : 1000,
+    #     "verbose" : True,
+    #     "linked_params" : ["f_1", "n"],
+    #     "const_params" : ["xc", "yc", "theta", "ellip_1", "ellip_2", "r_eff_1", "r_eff_2"],
+    #     "out_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/scalpel_outputs/gs-9209_sersic_exp",
+    #     "fig_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/scalpel_outputs/gs-9209_sersic_exp",
+    # },
+
     "fit_kwargs" : {
         "fit_type" : "simultaneous",
         "profile_type" : "sersic_exp",
@@ -251,14 +271,17 @@ config = {
         "loss_func" : "student_t",
         "method" : "mcmc",
         "multifitter" : "poly",
+        "multifit_kwargs" : {
+            "poly_order" : 2,
+        },
         "use_cube_wave" : False,
         "invert_wave" : False,
         "seed" : 1000,
         "verbose" : True,
         "linked_params" : ["f_1", "n"],
         "const_params" : ["xc", "yc", "theta", "ellip_1", "ellip_2", "r_eff_1", "r_eff_2"],
-        "out_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/gs-9209_sersic_exp",
-        "fig_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/gs-9209_sersic_exp",
+        "out_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/gs-9209/scalpel_outputs/gs-9209_sersic_exp",
+        "fig_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/gs-9209/scalpel_outputs/gs-9209_sersic_exp",
     },
 }
 
