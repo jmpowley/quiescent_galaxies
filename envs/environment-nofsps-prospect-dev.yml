@@ -16,16 +16,21 @@ dependencies:
   - mpi4py
   - git
   - gfortran
-  - cmake          # scikit-build / cmake-based builds
-  - ninja          # faster CMake backend for scikit-build
-  - scikit-build   # cmake-based build support (conda-forge)
-  - setuptools_scm # used by fsps metadata generation
+  - cmake
+  - ninja
+  - scikit-build
+  - setuptools_scm
   - pip
   - pip:
-    - scikit-build-core   # PEP-517 backend; pip-installed wheel is typical
+    - scikit-build-core
     - jupyterlab
     - matplotlib
     - astropy
     - astro-sedpy
-    # Note: fsps is intentionally NOT listed here (we build it later with FFLAGS)
+    # Note: fsps is intentionally NOT listed here (built later with FFLAGS)
     # Note: prospector dev install is done from local repo in the script
+    # -- extra packages
+    - pandas
+    - lmfit
+    - numdifftools
+    - grizli

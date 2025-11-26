@@ -1,1 +1,0 @@
-FFLAGS="-DMILES=0 -DC3K=1" python -m pip install $SPS_HOME/. --no-binary fsps
