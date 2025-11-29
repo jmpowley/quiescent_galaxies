@@ -202,6 +202,8 @@ def plot_spec_obs_model_comparison(obs, pred, spec_to_show, lines=None, z=None, 
     spec_wave_um = convert_wave_A_to_um(spec_wave_A)
     spec_obs_flux_maggie, spec_obs_err_maggie = spec_obs.flux, spec_obs.uncertainty
     spec_obs_flux_cgs, spec_obs_err_cgs = convert_flux_maggie_to_cgs(spec_obs_flux_maggie, spec_obs_err_maggie, spec_wave_m, cgs_factor=1e-19)
+    good = spec_obs.mask
+    bad = ~good
 
     # Convert predicted data to plot
     # -- photometry
@@ -219,30 +221,49 @@ def plot_spec_obs_model_comparison(obs, pred, spec_to_show, lines=None, z=None, 
     ax = fig.add_subplot(gs[0])
     ax_res = fig.add_subplot(gs[1], sharex=ax)
 
+    # Find ranges where mask is False
+    edges = np.diff(bad.astype(int))
+    starts = np.where(edges == 1)[0] + 1
+    ends   = np.where(edges == -1)[0] + 1
+    # -- handle if the sequence starts or ends inside a false region
+    if bad[0]:
+        starts = np.r_[0, starts]
+    if bad[-1]:
+        ends = np.r_[ends, len(good)]
+    bad_ranges = list(zip(starts, ends))
+
+    print(bad_ranges)
+
     # Plot data and model predictions
+
+    # -- masked regions
+    for i, range in enumerate(bad_ranges):
+        lo, hi = range
+        ax.axvspan(spec_wave_um[lo], spec_wave_um[hi-1], color="C0", alpha=0.3, label="Masked regions" if i ==0 else None)
+
     # -- photometry
     ax.errorbar(phot_wave_um, phot_obs_flux_cgs, yerr=phot_obs_err_cgs, 
                 color='red', marker='o', markerfacecolor='none', ls='none', label='Photometry')
     ax.scatter(phot_wave_um, phot_pred_flux_cgs, 
                color='orange', marker='o', label='Photometry fit')
-    # -- prism
-    ax.step(spec_wave_um, spec_obs_flux_cgs, 
-            color='black', label=spec_to_show, where='mid')
-    ax.fill_between(spec_wave_um, spec_obs_flux_cgs-spec_obs_err_cgs, spec_obs_flux_cgs+spec_obs_err_cgs, 
-                    step='mid', color='black', alpha=0.25)
-    # ax.plot(prism_wave_um, prism_pred_flux_cgs, color='blue', label='Prism fit')
-    ax.step(spec_wave_um, spec_pred_flux_cgs, color='blue', label=f'{spec_to_show} fit', where='mid')
-    # -- residuals
-    ax_res.scatter(spec_wave_um,
-                #    (prism_obs_flux_cgs-prism_pred_flux_cgs),  # unnormalised
-                   ((spec_obs_flux_cgs-spec_pred_flux_cgs) / spec_obs_err_cgs),  # normalised
+    # -- spectra (masked)
+    # ax.step(spec_wave_um[good], spec_obs_flux_cgs[good], 
+    #         color='black', label=spec_to_show, where='mid')
+    # ax.fill_between(spec_wave_um[good], 
+    #                 spec_obs_flux_cgs[good]-spec_obs_err_cgs[good], spec_obs_flux_cgs[good]+spec_obs_err_cgs[good], 
+    #                 step='mid', color='black', alpha=0.25)
+    # -- spectra (unmasked)
+    ax.step(spec_wave_um, spec_obs_flux_cgs, color='black', label=spec_to_show, where='mid')
+    ax.fill_between(spec_wave_um, spec_obs_flux_cgs-spec_obs_err_cgs, spec_obs_flux_cgs+spec_obs_err_cgs, step='mid', color='black', alpha=0.25)
+    # ax.step(spec_wave_um, spec_pred_flux_cgs, color='blue', label=f'{spec_to_show} fit', where='mid')
+    # -- model (masked)
+    ax.step(spec_wave_um[good], spec_pred_flux_cgs[good], color='blue', label=f'{spec_to_show} fit', where='mid')
+    # -- normalised residuals
+    ax_res.scatter(spec_wave_um[good], ((spec_obs_flux_cgs[good]-spec_pred_flux_cgs[good]) / spec_obs_err_cgs[good]), 
                    color='blue', marker='.')
-    ax_res.scatter(phot_wave_um,
-                #    phot_obs_flux_cgs-phot_pred_flux_cgs,  # unnormalised
-                   ((phot_obs_flux_cgs-phot_pred_flux_cgs) / phot_obs_err_cgs),  # normalised
-                   color="orange", marker="o")
+    ax_res.scatter(phot_wave_um, ((phot_obs_flux_cgs-phot_pred_flux_cgs) / phot_obs_err_cgs), color="orange", marker="o")
     ax_res.axhline(0, color="gray", ls="--")
-    # Plot emission lines
+    # -- plot emission lines
     if lines is not None:
         for (stri, wl) in lines.items():
             ax.axvline(wl, color='gray', ls="--")
@@ -523,17 +544,22 @@ def save_posteriors(results, model, out_path):
     np.savez(out_path, lnprob=lnprob, weights=weights, samples=samples, subsamples=subsamples, names=names)
 
 # Load results from output file
-out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs"
+# -- directory
+# out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs/zf-uds-7329_flat_model_mistmiles"
+out_dir = "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs/zf-uds-7329_flat_model_mistc3ka"
+# -- file
 # out_file = "zf-uds-7329_flat_model_nautilus.h5"
 # out_file = "zf-uds-7329_flat_model_nautilus_2.h5"
 # out_file = "zf-uds-7329_flat_model_nautilus_phot_prism.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebF_snr20.h5"
-out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebF_smoothT_nuisF.h5"
+# out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebF_smoothT_nuisF.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebT_smoothT_nuisT.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_nebT_smoothT_nuisF.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_g235m_nebF.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_g235m_nebF_smoothT.h5"
 # out_file = "zf-uds-7329_flat_model_nautlius_phot_prism_g235m_nebT.h5"
+# out_file = "zf-uds-7329_flat_model_mistc3ka_nautilus_phot_prism_g235m_nebF_smoothT_nuisF.h5"
+out_file = "zf-uds-7329_flat_model_mistc3ka_nautilus_phot_prism_g140m_g235m_nebF_smoothT_nuisF.h5"
 out_path = os.path.join(out_dir, out_file)
 results_type = "nautlius"
 results, obs, _ = reader.results_from(out_path.format(results_type), dangerous=True)
@@ -670,7 +696,7 @@ plot_sfh(age_bins, sfh_best, sfh_chain, weights, **sfh_kwargs)
 # fig_name = f"{fig_base}_obs_pred_comparison.png"
 # plot_obs_model_comparison(obs, pred, lines=zlines_um, z=z, fig_dir=fig_dir, fig_name=fig_name, savefig=True)
 # -- compare specific spectrum
-spec_to_show = 'prism'
+spec_to_show = "prism"
 fig_name = f"{fig_base}_{spec_to_show}_obs_pred_comparison.png"
 plot_spec_obs_model_comparison(obs, pred, spec_to_show=spec_to_show, lines=zlines_um, z=z, fig_dir=fig_dir, fig_name=fig_name, savefig=save_figs)
 # -- compare extended model

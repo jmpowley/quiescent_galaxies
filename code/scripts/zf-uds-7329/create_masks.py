@@ -8,7 +8,7 @@ from astropy.io import fits
 from loading import load_prism_data, load_grating_data
 from conversions import convert_wave_A_to_um, convert_wave_um_to_A
 
-def create_1d_wave_mask(wave, wave_units : str, mask_dict : dict, mask_units, default : bool, redshift_lines : bool, z : float, return_ints : bool):
+def create_1d_wave_mask(wave, wave_units : str, mask_dict : dict, mask_units, default : bool, redshift_lines : bool, zred : float, return_ints : bool):
     """Creates a boolean mask
     
     Parameters
@@ -41,56 +41,60 @@ def create_1d_wave_mask(wave, wave_units : str, mask_dict : dict, mask_units, de
 
     # Redshift lines
     if redshift_lines:
-        # -- create temporary dict
-        new_mask_dict = {}
+        new_mask = {}
         for key, val in mask_dict.items():
             if key != 'line' or val is None:
-                new_mask_dict[key] = val
+                new_mask[key] = val
                 continue
-            new_mask_dict['line'] = [[entry[0] * (1.+z), entry[1]] for entry in val]  # only redshift line centre
-        mask_dict = new_mask_dict
-
-    print("After redshifting:")
-    print(mask_dict)
+            new_mask['line'] = [[entry[0] * (1+zred), entry[1]] for entry in val]  # only redshift line centre
+        mask_dict = new_mask
 
     # Convert values
-    # -- create temporary dict
-    new_mask_dict = {}
+    new_mask = {}
+    # -- no conversion
+    if wave_units == mask_units:
+        converted = mask_dict.copy()
     # -- microns to angstroms
-    if wave_units == "um" and mask_units == "A":
-        new_mask_dict = {
-            key: [convert_wave_A_to_um(v) for v in val]
-            for key, val in mask_dict.items()
-        }
+    elif wave_units == "um" and mask_units == "A":
+        converted = {}
+        for key, val in mask_dict.items():
+            if val is None:
+                converted[key] = None
+                continue
+            if key == 'range':
+                converted['range'] = [[convert_wave_A_to_um(lo), convert_wave_A_to_um(hi)] for lo, hi in val]
+            elif key == 'line':
+                converted['line']  = [[convert_wave_A_to_um(line), convert_wave_A_to_um(width)] for line, width in val]
     # -- angstroms to microns
     elif wave_units == "A" and mask_units == "um":
-        new_mask_dict = {
-            key: [convert_wave_um_to_A(v) for v in val]
-            for key, val in mask_dict.items()
-        }
-    # -- do nothing
-    elif wave_units == mask_units:
-        pass
+        converted = {}
+        for key, val in mask_dict.items():
+            if val is None:
+                converted[key] = None
+                continue
+            if key == 'range':
+                converted['range'] = [[convert_wave_um_to_A(lo), convert_wave_um_to_A(hi)] for lo, hi in val]
+            elif key == 'line':
+                converted['line']  = [[convert_wave_um_to_A(center), width] for center, width in val]
+    # -- incorrect units
     else:
         raise ValueError(f"wave_units {wave_units} or mask_units {mask_units} are not accepted. Please use 'um' or 'A'")
-    mask_dict = new_mask_dict
-
-    print("After conversion:")
-    print(mask_dict)
+    mask_dict = converted
 
     # Apply mask dictionary to mask array
+    eps = 1e-12
     for key, val in mask_dict.items():
         key_mask = np.zeros(wave.shape, dtype=bool)
         # -- range entries
         if key == "range":
             for entry in val:
                 lo, hi = entry
-                key_mask |= (wave >= lo) & (wave <= hi)
+                key_mask |= (wave >= lo - eps) & (wave <= hi + eps)
         # -- line entries
         elif key == "line":
             for entry in val:
                 line, width = entry
-                key_mask |= (np.abs(wave - line) <= width)
+                key_mask |= (np.abs(wave - line) <= width + eps)
         else:
             raise ValueError(f"Unknown mask key: {key}")
 
@@ -121,36 +125,42 @@ def save_wave_mask(mask, out_dir : str,out_file : str, mask_ext : str):
 
 def plot_mask(wave, flux, mask, zred=None, color='gray', alpha=0.3, default=True):
     """
-    Plots shaded regions (axvspan) for contiguous wavelength regions 
-    where the mask is default.
+    Plots shaded regions for contiguous wavelength regions where the mask is default.
     """
     wave = np.asarray(wave)
-    mask = np.asarray(mask)
+    mask = np.asarray(mask).astype(bool)
+    N = mask.size
 
     # Create figure
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
 
     # Optionally invert mask to highlight where mask is not default
+    mask_bool = True
     if default is True:
         mask = ~mask
+        mask_bool = False
 
-    # Process mask
-    # -- identify mask/unmasked transitions
+    # Identify transitions between masked/unmasked
     diff = np.diff(mask.astype(int))
-    start_indices = np.where(diff==1)[0] + 1
-    end_indices = np.where(diff==-1)[0] + 1
-    # -- handle cases where mask starts/ends inside a masked region
+    starts = list(np.where(diff == 1)[0] + 1)
+    ends   = list(np.where(diff == -1)[0] + 1)
+    # -- if mask begins True, then the first region starts at index 0
     if mask[0]:
-        start_indices = np.insert(start_indices, 0, 0)
+        starts = [0] + starts
+    # -- if mask ends True, the last region ends at index N-1
     if mask[-1]:
-        end_indices = np.append(end_indices, len(mask) - 1)
+        ends = ends + [N - 1]
+
+    # Ensure indices are in bounds and ints
+    start_indices = [int(max(0, min(N - 1, s))) for s in starts]
+    end_indices   = [int(max(0, min(N - 1, e))) for e in ends]
 
     # Plot spectra
     ax.step(wave, flux, color="black", where="mid")
 
     # Plot mask
-    for start, end in zip(start_indices, end_indices):
-        ax.axvspan(wave[start], wave[end], color=color, alpha=alpha)
+    for i, (start, end) in enumerate(zip(start_indices, end_indices)):
+        ax.axvspan(wave[start], wave[end], color=color, alpha=alpha, label=f"Mask = {mask_bool}" if i == 0 else None)
 
     # Prettify
     ax.set_ylim(0, None)
@@ -158,12 +168,16 @@ def plot_mask(wave, flux, mask, zred=None, color='gray', alpha=0.3, default=True
     if zred is not None:
         ax_top = ax.twiny()
         ax_top.set_xlim(ax.get_xlim())
-        top_ticks_rest = np.arange(0.2, 1.4, 0.2)
+        tick_step = 0.2
+        start_tick = np.ceil((wave.min()/(1+zred)) / tick_step) * tick_step
+        end_tick = np.floor((wave.max()/(1+zred)) / tick_step) * tick_step
+        top_ticks_rest = np.arange(start_tick, end_tick+tick_step, tick_step)
         top_ticks_obs = top_ticks_rest * (1 + zred)
         ax_top.set_xticks(top_ticks_obs)
         ax_top.set_xticklabels([f"{t:.1f}" for t in top_ticks_rest])
     ax.set_xlabel(r'Observed Wavelength [$\mu$m]', size=18)
     ax.set_ylabel(r'$f_\lambda~[~10^{-19}$ erg s$^{-1}$ cm$^{-2}$ Å$^{-1}]$', size=18)
+    ax.legend()
 
     return fig
 
@@ -193,6 +207,7 @@ obs_kwargs = {
         "out_wave_units" : "um",
         "in_flux_units" : "si",
         "out_flux_units" : "cgs",
+        "cgs_factor" : 1e-19,
         "rescale_factor" : 1.86422,
         "snr_limit" : 20.0,
         "prefix" : "prism",
@@ -211,6 +226,7 @@ obs_kwargs = {
         "out_wave_units" : "um",
         "in_flux_units" : "ujy",
         "out_flux_units" : "cgs",
+        "cgs_factor" : 1e-19,
         "rescale_factor" : 1.86422,
         "snr_limit" : 20.0,
         "prefix" : "g140m",
@@ -229,6 +245,7 @@ obs_kwargs = {
         "out_wave_units" : "um",
         "in_flux_units" : "ujy",
         "out_flux_units" : "cgs",
+        "cgs_factor" : 1e-19,
         "rescale_factor" : 1.86422,
         "snr_limit" : 20,
         "prefix" : "g235m",
@@ -247,6 +264,7 @@ obs_kwargs = {
         "out_wave_units" : "um",
         "in_flux_units" : "ujy",
         "out_flux_units" : "cgs",
+        "cgs_factor" : 1e-19,
         "rescale_factor" : 1.86422,
         "snr_limit" : 20.0,
         "prefix" : "g395m",
@@ -273,42 +291,54 @@ grat3_wave_um, grat3_flux, grat3_err = load_grating_data(**grat3_kwargs)
 # Create prism mask
 prism_mask_dict_A = {
     'range' : [
-        [convert_wave_um_to_A(prism_wave_um.min()), convert_wave_um_to_A(1)],
-        [convert_wave_um_to_A(5), convert_wave_um_to_A(prism_wave_um.max())],
+        [convert_wave_um_to_A(prism_wave_um.min()), 4000*(1+zred)],  # mask up to 4000A as C3K not accurate
         ],
     'line' : [
-        [5900, 400]  # sodium doublet
+        [5900, 400],  # NaD
+        [3934, 400],  # CaK
         ],
 }
 prism_mask = create_1d_wave_mask(wave=prism_wave_um, wave_units="um", mask_dict=prism_mask_dict_A, mask_units="A",
-                              default=True, redshift_lines=True, z=zred, return_ints=True)
+                              default=True, redshift_lines=True, zred=zred, return_ints=True)
 
-print("grat1")
 # Create grat1 mask
 grat1_mask_dict_A = {
     'range' : [
-        [convert_wave_um_to_A(grat1_wave_um.min()), convert_wave_um_to_A(1)],
-        ]
+        [convert_wave_um_to_A(grat1_wave_um.min()), 4000*(1+zred)],  # mask up to 4000A rest-frame as C3K not accurate
+        [convert_wave_um_to_A(grat1_wave_um.min()), convert_wave_um_to_A(1)],  # mask high flux values at start of range
+        ],
+    'line' : [
+        [5900, 400],  # NaD
+        [3934, 400],  # CaK
+        ],
 }
 grat1_mask = create_1d_wave_mask(wave=grat1_wave_um, wave_units="um", mask_dict=grat1_mask_dict_A, mask_units="A",
-                              default=True, redshift_lines=True, z=zred, return_ints=True)
+                              default=True, redshift_lines=True, zred=zred, return_ints=True)
 
 # Create grat2 mask
 grat2_mask_dict_A = {
-
+    'range' : [
+        [convert_wave_um_to_A(grat2_wave_um.min()), 4000*(1+zred)],  # mask up to 4000A rest-frame as C3K not accurate
+        ],
+    'line' : [
+        [5900, 400],  # NaD
+        [3934, 400],  # CaK
+        ],
 }
+grat2_mask = create_1d_wave_mask(wave=grat2_wave_um, wave_units="um", mask_dict=grat2_mask_dict_A, mask_units="A",
+                              default=True, redshift_lines=True, zred=zred, return_ints=True)
 
-print("grat3")
 # Create grat3 mask
 grat3_mask_dict_A = {
     'range' : [
-        [convert_wave_um_to_A(grat3_wave_um.min()), convert_wave_um_to_A(2.75)],
-        [convert_wave_um_to_A(5.4), convert_wave_um_to_A(grat3_wave_um.max())],
-        [convert_wave_um_to_A(prism_wave_um.max()), convert_wave_um_to_A(grat3_wave_um.max())],  # cut off at prism limit
-        ]
+        [convert_wave_um_to_A(grat3_wave_um.min()), convert_wave_um_to_A(2.75)],  # mask high flux values at start of range
+        [convert_wave_um_to_A(5.4), convert_wave_um_to_A(grat3_wave_um.max())],  # mask high flux values at start of range
+        ],
+    'line' : [
+        ],
 }
 grat3_mask = create_1d_wave_mask(wave=grat3_wave_um, wave_units="um", mask_dict=grat3_mask_dict_A, mask_units="A",
-                              default=True, redshift_lines=True, z=zred, return_ints=True)
+                              default=True, redshift_lines=True, zred=zred, return_ints=True)
 
 # Plot masks
 # -- prism
@@ -316,7 +346,7 @@ fig = plot_mask(prism_wave_um, prism_flux, prism_mask, zred=zred)
 # -- grat1
 fig = plot_mask(grat1_wave_um, grat1_flux, grat1_mask, zred=zred)
 # -- grat2
-# fig = plot_masked_regions(grat2_wave_um, grat2_flux, grat2_mask)
+fig = plot_mask(grat2_wave_um, grat2_flux, grat2_mask, zred=zred)
 # -- grat3
 fig = plot_mask(grat3_wave_um, grat3_flux, grat3_mask, zred=zred)
 
@@ -330,6 +360,9 @@ save_wave_mask(prism_mask, out_dir, out_file, mask_ext="MASK")
 # -- grat1
 out_file = grat1_kwargs["data_name"].replace(".fits", "_mask.fits")
 save_wave_mask(grat1_mask, out_dir, out_file, mask_ext="MASK")
+# -- grat2
+out_file = grat2_kwargs["data_name"].replace(".fits", "_mask.fits")
+save_wave_mask(grat2_mask, out_dir, out_file, mask_ext="MASK")
 # -- grat3
 out_file = grat3_kwargs["data_name"].replace(".fits", "_mask.fits")
 save_wave_mask(grat3_mask, out_dir, out_file, mask_ext="MASK")
