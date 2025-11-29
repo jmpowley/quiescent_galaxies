@@ -36,7 +36,7 @@ def convert_wave(wave_in, in_wave_units, out_wave_units):
     
     return wave_out
 
-def convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in=None, in_wave_units=None):
+def convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in=None, in_wave_units=None, cgs_factor=None):
 
     # Convert wavelengths for flux density calculations
     # -- no conversion
@@ -69,7 +69,7 @@ def convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in=None, i
         elif out_flux_units == "cgs":
             flux_maggie, err_maggie = convert_flux_magnitude_to_maggie(flux_in, err_in)
             wave_m = convert_wave_um_to_m(wave_in)  # assumes wavelength given in microns
-            flux_out, err_out = convert_flux_maggie_to_cgs(flux_maggie, err_maggie, wave_m, cgs_factor=1e-19)
+            flux_out, err_out = convert_flux_maggie_to_cgs(flux_maggie, err_maggie, wave_m, cgs_factor=cgs_factor)
         else:
             raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
     # -- from SI
@@ -79,7 +79,7 @@ def convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in=None, i
             flux_out, err_out = flux_in, err_in
         # -- to CGS units
         elif out_flux_units == "cgs":
-            flux_out, err_out = convert_flux_si_to_cgs(flux_in, err_in, cgs_factor=1e-19)
+            flux_out, err_out = convert_flux_si_to_cgs(flux_in, err_in, cgs_factor=cgs_factor)
         # -- to microjanskies
         elif out_flux_units == "ujy":
             wave_m = wave_in
@@ -97,11 +97,12 @@ def convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in=None, i
             flux_out, err_out = flux_in, err_in
         # -- to maggie
         elif out_flux_units == "maggie":
-            flux_out, err_out = convert_flux_jy_to_maggie(flux_in, err_in)
+            flux_jy, err_jy = convert_flux_ujy_to_jy(flux_in, err_in)
+            flux_out, err_out = convert_flux_jy_to_maggie(flux_jy, err_jy)
         # -- to CGS
         elif out_flux_units == "cgs":
             flux_jy, err_jy = convert_flux_ujy_to_jy(flux_in, err_in)
-            flux_out, err_out = convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=1e-19)
+            flux_out, err_out = convert_flux_jy_to_cgs(wave_m, flux_jy, err_jy, cgs_factor=cgs_factor)
         else:
             raise ValueError(f'Output flux unit ({out_flux_units}) not recognised')
     # -- incorrect input unit
@@ -160,7 +161,7 @@ def convert_wave_A_to_um(wave_A, return_quantity=False, return_unit=False):
         wave_A = wave_A * u.AA
 
     # Convert wavelength to microns
-    wave_um = wave_A.to(u.um)
+    wave_um = wave_A * 1e-4
     wave_unit = u.um
 
     # Optionally return unit and quantity 
@@ -179,7 +180,7 @@ def convert_wave_um_to_A(wave_um, return_quantity=False, return_unit=False):
         wave_um = wave_um * u.um
 
     # Convert wavelength to metres
-    wave_A = wave_um.to(u.AA)
+    wave_A = wave_um * 1e4
     wave_unit = u.AA
 
     # Optionally return unit and quantity 
