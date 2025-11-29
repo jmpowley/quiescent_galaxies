@@ -123,13 +123,35 @@ config = {
     "cube_kwargs" : None,
 
     "prior_dict" : {
-        "r_eff_1" : (0.5, 5.0),
-        "r_eff_2" : (0.5, 5.0),
-        "ellip_1" : (0.0, 1.0),
-        "ellip_2" : (0.0, 1.0),
-        "f_1" : (0.0, 1.0),
-        "n" : (2.0, 4.5),  # Sersic index of the central component
+        "uniform" : {
+            "r_eff_1" : (0.5, 5.0),
+            "r_eff_2" : (0.5, 5.0),
+            "ellip_1" : (0.0, 1.0),
+            "ellip_2" : (0.0, 1.0),
+            "f_1" : (0.0, 1.0),
+            "n" : (1.0, 4.5),  # Sersic index of the central component
+        }
     },
+
+    # "fit_kwargs" : {
+    #     "fit_type" : "simultaneous",
+    #     "profile_type" : "sersic_exp",
+    #     "sky_type" : "none",
+    #     "loss_func" : "student_t",
+    #     "method" : "mcmc",
+    #     "multifitter" : "bspline",
+    #     "multifit_kwargs" : {
+    #         "N_knots" : 4,
+    #     },
+    #     "use_cube_wave" : False,
+    #     "invert_wave" : False,
+    #     "seed" : 1000,
+    #     "verbose" : True,
+    #     "linked_params" : ["f_1", "n"],
+    #     "const_params" : ["xc", "yc", "theta", "ellip_1", "ellip_2", "r_eff_1", "r_eff_2"],
+    #     "out_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/scalpel_outputs/zf-uds-7329_sersic_exp",
+    #     "fig_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/zf-uds-7329/scalpel_outputs/zf-uds-7329_sersic_exp",
+    # },
 
     "fit_kwargs" : {
         "fit_type" : "simultaneous",
@@ -138,14 +160,17 @@ config = {
         "loss_func" : "student_t",
         "method" : "mcmc",
         "multifitter" : "poly",
+        "multifit_kwargs" : {
+            "poly_order" : 2,
+        },
         "use_cube_wave" : False,
         "invert_wave" : False,
         "seed" : 1000,
         "verbose" : True,
         "linked_params" : ["f_1", "n"],
         "const_params" : ["xc", "yc", "theta", "ellip_1", "ellip_2", "r_eff_1", "r_eff_2"],
-        "out_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/zf-uds-7329_sersic_exp",
-        "fig_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/zf-uds-7329/zf-uds-7329_sersic_exp",
+        "out_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/scalpel_outputs/zf-uds-7329_sersic_exp",
+        "fig_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/figures/zf-uds-7329/scalpel_outputs/zf-uds-7329_sersic_exp",
     },
 }
 
