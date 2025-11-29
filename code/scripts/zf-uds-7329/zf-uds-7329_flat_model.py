@@ -30,7 +30,6 @@ def convert_zred_to_agebins(zred=None, nbins_sfh=None, **extras):
         """
 
         # TODO: Add cosmology as kwarg
-
         cosmo = cosmology.FlatLambdaCDM(H0=67.4, Om0=0.315, Tcmb0=2.726)
         zmax = 20
 
@@ -40,7 +39,7 @@ def convert_zred_to_agebins(zred=None, nbins_sfh=None, **extras):
         tbinmax = tuniv - tbinmax
         #agelims = [0.0, 7.4772] + np.linspace(8.0, np.log10(tbinmax), ncomp-1).tolist()
         logtmax = np.log10(2*10**9)
-        agelims = [0.0, 7.0, 7.4772] \
+        agelims = [0.0, 7.0, 7.4771] \
                     + np.linspace(8.0, 9.0, ncomp-6, endpoint=False).tolist() \
                     + np.log10(np.linspace(1.*10**9, tbinmax, 4, endpoint=True)).tolist()
         agebins = np.array([agelims[:-1], agelims[1:]])
@@ -158,10 +157,10 @@ def build_obs(obs_kwargs, **extras):
     grat3_wave, grat3_flux, grat3_err = load_grating_data(**obs_kwargs["grat3_kwargs"])
 
     # Load resolution data
-    prism_res = load_dispersion_data(**obs_kwargs["prism_kwargs"])
-    grat1_res = load_dispersion_data(**obs_kwargs["grat1_kwargs"])
-    grat2_res = load_dispersion_data(**obs_kwargs["grat2_kwargs"])
-    grat3_res = load_dispersion_data(**obs_kwargs["grat3_kwargs"])
+    prism_sigma = load_dispersion_data(**obs_kwargs["prism_kwargs"])
+    grat1_sigma = load_dispersion_data(**obs_kwargs["grat1_kwargs"])
+    grat2_sigma = load_dispersion_data(**obs_kwargs["grat2_kwargs"])
+    grat3_sigma = load_dispersion_data(**obs_kwargs["grat3_kwargs"])
 
     # Build noise models
     phot_noise = build_noise(**obs_kwargs["phot_kwargs"])
@@ -170,19 +169,17 @@ def build_obs(obs_kwargs, **extras):
     grat2_noise = build_noise(**obs_kwargs["grat2_kwargs"])
     grat3_noise = build_noise(**obs_kwargs["grat3_kwargs"])
 
-    # NOTE: Added in to fix library resolution issue. Considered (at least in part) temporary
-    # -- define prism mask for crop function
-    prism_mask = np.ones_like(prism_wave).astype(bool)
-    # -- apply crop to prism
-    prism_wave, prism_flux, prism_err, prism_mask, prism_res = crop_bad_spectral_resolution(prism_wave, 
-                                                                                            prism_flux, 
-                                                                                            prism_err,
-                                                                                            prism_mask,
-                                                                                            prism_res,
-                                                                                            zred=3.2,
-                                                                                            wave_lo=2000,
-                                                                                            wave_hi=7000,
-                                                                                            )
+    # Load masks
+    prism_mask = load_mask_data(**obs_kwargs["prism_kwargs"])
+    grat1_mask = load_mask_data(**obs_kwargs["grat1_kwargs"])
+    grat2_mask = load_mask_data(**obs_kwargs["grat2_kwargs"])
+
+    # Crop wavelength ranges with spectral resolution high than data
+    # -- prism
+    prism_wave, prism_flux, prism_err, prism_mask, prism_sigma = crop_bad_spectral_resolution(prism_wave, prism_flux, prism_err,prism_mask, prism_sigma, zred=3.2, wave_rest_lo=2000, wave_rest_hi=7000)
+    # -- medium-grating spectra
+    grat1_wave, grat1_flux, grat1_err, grat1_mask, grat1_sigma = crop_bad_spectral_resolution(grat1_wave, grat1_flux, grat1_err, grat1_mask, grat1_sigma, zred=3.2, wave_rest_lo=3000, wave_rest_hi=7000)
+    grat2_wave, grat2_flux, grat2_err, grat2_mask, grat2_sigma = crop_bad_spectral_resolution(grat2_wave, grat2_flux, grat2_err, grat2_mask, grat2_sigma, zred=3.2, wave_rest_lo=2000, wave_rest_hi=9000)
 
     # Create Photometry and Spectrum classes
     # -- nircam photometry
@@ -194,44 +191,40 @@ def build_obs(obs_kwargs, **extras):
                       name=obs_kwargs["phot_kwargs"].get("prefix"),
                       )
     # -- prism spectrum
-    # prism_spec = Spectrum(wavelength=prism_wave, flux=prism_flux, uncertainty=prism_err, mask=None)
     prism_polyspec = PolySpectrum(wavelength=prism_wave,
                                   flux=prism_flux,
                                   uncertainty=prism_err,
-                                  mask=None,
+                                  mask=prism_mask,
                                   noise=prism_noise,
-                                  resolution=prism_res,
+                                  resolution=prism_sigma,
                                   polynomial_order=10,
                                   name=obs_kwargs["prism_kwargs"].get("prefix"),
                                   )
     # -- medium-grating spectrum
-    # grat1_spec = Spectrum(wavelength=grat1_wave, flux=grat1_flux, uncertainty=grat1_err, mask=None)
     grat1_polyspec = PolySpectrum(wavelength=grat1_wave,
                                   flux=grat1_flux,
                                   uncertainty=grat1_err,
-                                  mask=None,
+                                  mask=grat1_mask,
                                   noise=grat1_noise,
-                                  resolution=grat1_res,
+                                  resolution=grat1_sigma,
                                   polynomial_order=10,
                                   name=obs_kwargs["grat1_kwargs"].get("prefix"),
                                   )
-    # grat2_spec = Spectrum(wavelength=grat2_wave, flux=grat2_flux, uncertainty=grat2_err, mask=None)
     grat2_polyspec = PolySpectrum(wavelength=grat2_wave,
                                   flux=grat2_flux,
                                   uncertainty=grat2_err,
-                                  mask=None,
+                                  mask=grat2_mask,
                                   noise=grat2_noise,
-                                  resolution=grat2_res,
+                                  resolution=grat2_sigma,
                                   polynomial_order=10,
                                   name=obs_kwargs["grat2_kwargs"].get("prefix"),
                                   )
-    # grat3_spec = Spectrum(wavelength=grat3_wave, flux=grat3_flux, uncertainty=grat3_err, mask=None)
     grat3_polyspec = PolySpectrum(wavelength=grat3_wave,
                                   flux=grat3_flux,
                                   uncertainty=grat3_err,
                                   mask=None,
                                   noise=grat3_noise,
-                                  resolution=grat3_res,
+                                  resolution=grat3_sigma,
                                   polynomial_order=10,
                                   name=obs_kwargs["grat3_kwargs"].get("prefix"),
                                   )
@@ -239,17 +232,12 @@ def build_obs(obs_kwargs, **extras):
     # Build obs from spectrum and photometry
     # -- ensures all required keys are present for fitting
     phot.rectify()
-    # prism_spec.rectify()
     prism_polyspec.rectify()
-    # grat1_spec.rectify()
     grat1_polyspec.rectify()
-    # grat2_spec.rectify()
     grat2_polyspec.rectify()
-    # grat3_spec.rectify()
     grat3_polyspec.rectify()
     # -- complile observations
-    # obs = [phot, prism_spec, grat1_spec, grat2_spec, grat3_spec]
-    obs = [phot, prism_polyspec, grat1_polyspec, grat2_polyspec, grat3_polyspec]  # polynomial spectral calibration
+    obs = [phot, prism_polyspec, grat1_polyspec, grat2_polyspec, grat3_polyspec]
 
     return obs
 
@@ -290,7 +278,7 @@ def build_model(model_kwargs, obs_kwargs=None, **extras):
         model_params["eline_sigma"] = dict(N=1, isfree=True, init=100.0, units="km/s",
                                            prior=priors.TopHat(mini=30, maxi=550))
         
-    # Set zred to free
+    # Set zred
     model_params["zred"]["isfree"] = True
     model_params["zred"]["init"] = model_kwargs["zred"]
     # model_params["zred"]["prior"] = priors.TopHat(mini=3.0, maxi=3.4)
@@ -454,9 +442,9 @@ def main():
             "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
             "data_name" : "007329_prism_clear_v3.1_extr5_1D.fits",
             "data_ext" : "DATA",
-            "mask_dir" : None,
-            "mask_name" : None,
-            "mask_ext" : None,
+            "mask_dir" :  "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/wave_masks",
+            "mask_name" : "007329_prism_clear_v3.1_extr5_1D_mask.fits",
+            "mask_ext" : "MASK",
             "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
             "disp_name" : "uds7329_nirspec_prism_disp.fits",
             "in_wave_units" : "si",
@@ -475,9 +463,9 @@ def main():
             "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
             "data_name" : "007329_g140m_f100lp_1D.fits",
             "data_ext" : "DATA",
-            "mask_dir" : None,
-            "mask_name" : None,
-            "mask_ext" : None,
+            "mask_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/wave_masks",
+            "mask_name" : "007329_g140m_f100lp_1D_mask.fits",
+            "mask_ext" : "MASK",
             "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
             "disp_name" : "jwst_nirspec_g140m_disp.fits",
             "in_wave_units" : "um",
@@ -489,16 +477,16 @@ def main():
             "prefix" : "g140m",
             "add_jitter" : True,
             "include_outliers" : True,
-            "fit_obs" : False,
+            "fit_obs" : True,
         },
 
         "grat2_kwargs" : {
             "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
             "data_name" : "007329_g235m_f170lp_1D.fits",
             "data_ext" : "DATA",
-            "mask_dir" : None,
-            "mask_name" : None,
-            "mask_ext" : None,
+            "mask_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/wave_masks",
+            "mask_name" : "007329_g235m_f170lp_1D_mask.fits",
+            "mask_ext" : "MASK",
             "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
             "disp_name" : "jwst_nirspec_g235m_disp.fits",
             "in_wave_units" : "um",
@@ -510,7 +498,7 @@ def main():
             "prefix" : "g235m",
             "add_jitter" : True,
             "include_outliers" : True,
-            "fit_obs" : False,
+            "fit_obs" : True,
         },
 
         "grat3_kwargs" : {
