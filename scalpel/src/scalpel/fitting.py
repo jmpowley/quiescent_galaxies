@@ -24,7 +24,7 @@ def _set_priors(image, mask, profile_type, sky_type, prior_dict):
     """Sets priors for model in PySersic"""
 
     # Generate priors from image
-    # props = SourceProperties(im, mask=mask) # Optional mask
+    # props = SourceProperties(image) # Optional mask
     # prior = props.generate_prior(profile_type=profile_type, sky_type=sky_type)
     prior = autoprior(image=image, profile_type=profile_type, mask=mask, sky_type=sky_type)
 
@@ -57,7 +57,7 @@ def fit_band(data, mask, rms, psf, prior, loss_func, method, rkey, verbose):
     loss_func = loss_map[loss_func]
 
     # Setup fitter
-    fitter = FitSingle(data=data, rms=rms ,mask=mask, psf=psf, prior=prior, loss_func=loss_func)
+    fitter = FitSingle(data=data, rms=rms, mask=mask, psf=psf, prior=prior, loss_func=loss_func)
 
     # Estimate posterior
     rkey, rkey_est = jax.random.split(rkey, 2) # use different random number key for each run
@@ -72,6 +72,9 @@ def fit_band(data, mask, rms, psf, prior, loss_func, method, rkey, verbose):
         print("Result from fit:")
         if method == "mcmc":
             print(result.retrieve_param_quantiles(return_dataframe=True))
+
+    fitter_map = fitter.find_MAP()
+    print("MAP of fit:\n", fitter_map)
 
     return fitter, result
 
@@ -99,7 +102,7 @@ def fit_bands_independent(cutout_kwargs, prior_dict, profile_type, sky_type, los
         fitter, result = fit_band(data=image, mask=mask, rms=sig, psf=psf, prior=prior, loss_func=loss_func, method=method, rkey=rkey_fit, verbose=verbose)
 
         # Save results
-        out_name = f"{profile_type}_fit_{filter}.asdf"
+        out_name = f"{profile_type}_{method}_fit_{filter}.asdf"
         out_path = os.path.join(out_dir, out_name)
         result.save_result(out_path)
 
@@ -171,7 +174,7 @@ def fit_bands_simultaneous(cutout_kwargs, cube_kwargs, in_prior_dict, linked_par
         result.save_result(out_path)
 
         # Make plots
-        make_plots(fitter, image, mask, sig, psf, profile_type=profile_type, filter=filter, fig_dir=fig_dir)
+        make_plots(fitter, image, mask, sig, psf, profile_type=profile_type, method=method, filter=filter, fig_dir=fig_dir)
 
         # Save to lists/dicts
         filters.append(filter)
