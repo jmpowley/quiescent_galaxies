@@ -50,8 +50,8 @@ prism_wave_crop, prism_flux_crop, prism_err_crop, prism_mask_crop, prism_res_cro
                                                                                                                 prism_mask,
                                                                                                                 prism_disp,
                                                                                                                 zred=zred,
-                                                                                                                wave_lo=2000,
-                                                                                                                wave_hi=7000,
+                                                                                                                wave_rest_lo=2000,
+                                                                                                                wave_rest_hi=7000,
                                                                                                                 )
 
 # Create figure
