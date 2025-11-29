@@ -128,8 +128,7 @@ def load_photometry_data(data_dir : str, data_name : str, data_ext : str, in_flu
 
     return sedpy_filters, flux_out, err_out
 
-
-def load_prism_data(data_dir : str, data_name : str, data_ext : str, in_wave_units : str, out_wave_units : str, in_flux_units : str, out_flux_units : str, rescale_factor : float, snr_limit : float, 
+def load_prism_data(data_dir : str, data_name : str, data_ext : str, in_wave_units : str, out_wave_units : str, in_flux_units : str, out_flux_units : str, rescale_factor : float, snr_limit : float, cgs_factor : float = None,
                     return_none : bool = False, return_quantities : bool = False, return_units : bool = False, **extras):
     """
     Load a JWST NIRSpec/Prism 1D spectrum from a FITS file and convert units.
@@ -203,7 +202,7 @@ def load_prism_data(data_dir : str, data_name : str, data_ext : str, in_wave_uni
 
     # Convert units
     wave_out = convert_wave(wave_in, in_wave_units, out_wave_units)
-    flux_out, err_out = convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in, in_wave_units)
+    flux_out, err_out = convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in, in_wave_units, cgs_factor=cgs_factor)
 
     # Apply rescaling factor
     if rescale_factor is not None:
@@ -220,8 +219,7 @@ def load_prism_data(data_dir : str, data_name : str, data_ext : str, in_wave_uni
 
     return wave_out, flux_out, err_out
 
-
-def load_grating_data(data_dir : str, data_name : str, data_ext : str, in_wave_units : str, out_wave_units : str, in_flux_units : str, out_flux_units : str, rescale_factor : float, snr_limit : float, 
+def load_grating_data(data_dir : str, data_name : str, data_ext : str, in_wave_units : str, out_wave_units : str, in_flux_units : str, out_flux_units : str, rescale_factor : float, snr_limit : float, cgs_factor : float = None,
                       return_none : bool = False, return_quantities : bool = False, return_units : bool = False, **extras):
     """
     Load a JWST NIRSpec grating 1D spectrum from a FITS file and convert units.
@@ -294,7 +292,7 @@ def load_grating_data(data_dir : str, data_name : str, data_ext : str, in_wave_u
 
     # Convert units
     wave_out = convert_wave(wave_in, in_wave_units, out_wave_units)
-    flux_out, err_out = convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in, in_wave_units)
+    flux_out, err_out = convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in, in_wave_units, cgs_factor=cgs_factor)
 
     # Apply rescaling factor
     if rescale_factor is not None:
@@ -311,8 +309,7 @@ def load_grating_data(data_dir : str, data_name : str, data_ext : str, in_wave_u
 
     return wave_out, flux_out, err_out
 
-
-def load_dispersion_data(disp_dir : str, disp_name : str, data_dir : str, data_name : str, in_wave_units : str, **extras):
+def load_dispersion_data(disp_dir : str, disp_name : str, data_dir : str, data_name : str, in_wave_units : str, return_spec_res : bool = False, return_wave : bool = False, **extras):
     """
     Load a spectral resolution table and interpolate resolution onto data wavelengths.
 
@@ -330,7 +327,7 @@ def load_dispersion_data(disp_dir : str, disp_name : str, data_dir : str, data_n
     data_dir : str
         Directory containing the spectral FITS file whose wavelengths will be used.
     data_name : str
-        Spectral FITS file name (contains "WAVELENGTH" HDU).
+        Spectral FITS file name
     in_wave_units : str
         Input wavelength units for the spectral FITS file: ``'si'`` (metres) or ``'um'`` (microns).
     **extras
@@ -354,6 +351,12 @@ def load_dispersion_data(disp_dir : str, disp_name : str, data_dir : str, data_n
     spec_res = tb["R"].data
     disp_wave_um = tb["WAVELENGTH"].data
 
+    # Optionally return spectral resolution
+    if return_spec_res and return_wave:
+        return spec_res, disp_wave_um
+    if return_spec_res:
+        return spec_res
+
     # Load wavelength data
     wave_path = _resolve_path(data_dir, data_name)  # use same directory as load_x_data
     hdul = fits.open(wave_path)
@@ -366,7 +369,7 @@ def load_dispersion_data(disp_dir : str, disp_name : str, data_dir : str, data_n
     # Convert dispersion from dimensionless to km/s
     c_kms = constants.c.to("km/s").value
     fwhm_factor = 2 * np.sqrt(2 * np.log(2))
-    sigma_kms = c_kms / (spec_res * fwhm_factor)
+    sigma_kms = c_kms / spec_res / fwhm_factor
 
     # Interpolate for data wavelengths using dispersion curve
     interp = interp1d(disp_wave_A, sigma_kms, bounds_error=False, fill_value='extrapolate')
@@ -374,8 +377,7 @@ def load_dispersion_data(disp_dir : str, disp_name : str, data_dir : str, data_n
 
     return sigma_interp_kms
 
-
-def load_mask_data(mask_dir : str, mask_name : str, mask_ext : str, convert_to_bool : bool = True):
+def load_mask_data(mask_dir : str, mask_name : str, mask_ext : str, convert_to_bool : bool = True, **extras):
     """
     Load a mask HDU from a FITS file and optionally convert to boolean.
 
