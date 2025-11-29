@@ -9,22 +9,20 @@ from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from pysersic.results import plot_residual, plot_image
 from pysersic.rendering import HybridRenderer
 
-from scalpel.helpers import return_linked_param_at_filter, return_const_param
-
-def make_plots(fitter, image, mask, sig, psf, profile_type, filter, fig_dir):
+def make_plots(fitter, image, mask, sig, psf, profile_type, method, filter, fig_dir):
 
     # Make plots
     # -- data
     fig = call_plot_image(image, mask, sig, psf)
-    fig_name = f"{profile_type}_{filter}_data.pdf"
+    fig_name = f"{profile_type}_{method}_{filter}_data.pdf"
     fig.savefig(os.path.join(fig_dir, fig_name))
     # -- residual
     fig = call_plot_residual(fitter, image, mask, psf, profile_type)
-    fig_name = f"{profile_type}_{filter}_residual.pdf"
+    fig_name = f"{profile_type}_{method}_{filter}_residual.pdf"
     fig.savefig(os.path.join(fig_dir, fig_name))
     # -- corner
-    fig = fitter.sampling_results.corner(color='C0') 
-    fig_name = f"{profile_type}_{filter}_corner.pdf"
+    fig = fitter.sampling_results.corner(color='C0')
+    fig_name = f"{profile_type}_{method}_{filter}_corner.pdf"
     fig.savefig(os.path.join(fig_dir, fig_name))
 
 def call_plot_residual(fitter, im, mask, psf, profile_type):

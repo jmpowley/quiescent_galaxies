@@ -34,7 +34,9 @@ def save_simultaneous_fit_results_to_asdf(results_dict, prior_dict, cutout_kwarg
     elif multifit_str == "bspline":
         multifit_str = multifit_str + str(multifit_kwargs["N_knots"])
     # -- compile
-    out_name = f"{profile_str}_{method_str}_{multifit_str}_simfit_results.asdf"
+    out_name = f"{profile_str}_{method_str}_simfit_{multifit_str}_results.asdf"
+
+    print(f"Saved simultaneous fit result to: {out_name}")
 
     # Save results
     af = asdf.AsdfFile(tree)
