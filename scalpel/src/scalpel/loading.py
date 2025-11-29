@@ -66,7 +66,6 @@ def load_cutout_data(data_dir, data_name, data_ext, centre, width, height, psf_d
     # Impose SNR limit
     #sig = 0.01/np.sqrt(np.abs(wht)) + 0.1*np.sqrt(np.abs(im))
     sig = (1 / snr_limit) * np.sqrt(np.abs(image_in))
-
     sig[sig==0] = (1 / snr_limit) * np.sqrt(np.mean(np.abs((image_in))))  # fix for exactly 0-valued pixels
     
     # Extract subregion
