@@ -128,6 +128,97 @@ def load_photometry_data(data_dir : str, data_name : str, data_ext : str, in_flu
 
     return sedpy_filters, flux_out, err_out
 
+def load_spectrum_data(data_dir : str, data_name : str, data_ext : str, in_wave_units : str, out_wave_units : str, in_flux_units : str, out_flux_units : str, rescale_factor : float, snr_limit : float, cgs_factor : float = None,
+                    return_none : bool = False, return_quantities : bool = False, return_units : bool = False, **extras):
+    """
+    Load a 1D spectrum from a FITS file, convert units and apply preprocessing
+
+    The FITS path is built as ``Path(data_dir) / data_name``. The function expects the
+    FITS file to contain HDUs named "WAVELENGTH", "DATA" (or a custom `data_ext`), and "ERR".
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing the prism FITS file.
+    data_name : str
+        FITS file name (including suffix).
+    data_ext : str
+        Name of the FITS extension that contains the flux data. If `None`, "DATA" is used.
+    in_wave_units : str
+        Shorthand for input wavelength units: e.g., 'si' (metres) or 'um' (microns).
+    out_wave_units : str
+        Desired output wavelength units: e.g. 'um' (microns) or 'A' (angstroms).
+    in_flux_units : str
+        Shorthand for input flux units: e.g.'si' (watts per cubic metre), 'ujy' (microjansky).
+    out_flux_units : str
+        Desired output flux units (e.g. ``'cgs'``, ``'maggie'``, ``'ujy'``).
+    rescale_factor : float
+        Multiplicative factor applied to flux and error (if not `None`).
+    snr_limit : float
+        Maximum allowed signal-to-noise; if provided the function will call
+        :func:`apply_snr_limit`.
+    return_none : bool, optional
+        If True, return ``(None, None, None)`` immediately. Default is False.
+    return_quantities : bool, optional
+        *Currently not implemented.* Default is False.
+    return_units : bool, optional
+        *Currently not implemented.* Default is False.
+    **extras
+        Additional keyword arguments are accepted but ignored.
+
+    Returns
+    -------
+    wave_out : numpy.ndarray
+        Wavelength array converted to `out_wave_units`. Shape (M,) for M spectral pixels.
+    flux_out : numpy.ndarray
+        Flux array converted to `out_flux_units`. Shape (M,).
+    err_out : numpy.ndarray
+        Error array converted to `out_flux_units`. Shape (M,).
+
+    Raises
+    ------
+    ValueError
+        If `in_wave_units`, `in_flux_units`, or output units are not recognised.
+    OSError / FileNotFoundError
+        If the FITS file cannot be opened.
+    """
+    if return_none:
+        return None, None, None
+
+    # Load FITS file    
+    path = _resolve_path(data_dir, data_name)
+    hdul = fits.open(path)
+
+    # Extract spectral data
+    # -- wavelength
+    wave_in = hdul["WAVELENGTH"].data
+    # -- flux
+    if data_ext is not None:
+        flux_in = hdul[data_ext].data
+    else:    
+        flux_in = hdul["DATA"].data
+    # -- error
+    err_in = hdul["ERR"].data
+
+    # Convert units
+    wave_out = convert_wave(wave_in, in_wave_units, out_wave_units)
+    flux_out, err_out = convert_flux(flux_in, err_in, in_flux_units, out_flux_units, wave_in, in_wave_units, cgs_factor=cgs_factor)
+
+    # Apply rescaling factor
+    if rescale_factor is not None:
+        flux_out, err_out = apply_rescaling_factor(flux_out, err_out, rescale_factor)
+
+    # Apply noise floor
+    if snr_limit is not None:
+        flux_out, err_out = apply_snr_limit(flux_out, err_out, snr_limit)
+
+    # Explicitly make NumPy arrays
+    wave_out = np.asarray(wave_out)
+    flux_out = np.asarray(flux_out)
+    err_out = np.asarray(err_out)
+
+    return wave_out, flux_out, err_out
+
 def load_prism_data(data_dir : str, data_name : str, data_ext : str, in_wave_units : str, out_wave_units : str, in_flux_units : str, out_flux_units : str, rescale_factor : float, snr_limit : float, cgs_factor : float = None,
                     return_none : bool = False, return_quantities : bool = False, return_units : bool = False, **extras):
     """
