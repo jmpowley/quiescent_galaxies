@@ -9,7 +9,7 @@ import astropy.units as u
 from sedpy.observate import load_filters
 import fsps
 
-from prospect.sources.galaxy_basis import CSPSpecBasis, FastStepBasis
+from prospect.sources.galaxy_basis import FastStepBasis
 from prospect.observation import Photometry, Spectrum, PolyOptCal
 from prospect.models.templates import TemplateLibrary
 from prospect.models.sedmodel import SpecModel
@@ -21,7 +21,7 @@ from prospect.io import write_results as writer
 
 # Import functions
 sys.path.append("/Users/Jonah/PhD/Research/quiescent_galaxies/code/scripts/zf-uds-7329")
-from loading import load_photometry_data, load_prism_data, load_grating_data, load_mask_data, load_dispersion_data
+from loading import load_photometry_data, load_spectrum_data, load_mask_data, load_dispersion_data
 from preprocessing import crop_bad_spectral_resolution
 
 # ----------------
@@ -44,7 +44,7 @@ def convert_zred_to_agebins(zred=None, nbins_sfh=None, **extras):
 
     # Create set of age bins up from t_zmax to t_obs/t0
     n_comp = np.squeeze(nbins_sfh)
-    age_lims1 = [0.0, 7.0, 7.4771]  # 0, 10, 30 Myr
+    age_lims1 = [0.0, 7.0, 7.4771]  # 0(1), 10, 30 Myr
     n_age_lims3 = 4
     n_age_lims2 = (n_comp + 1) - len(age_lims1) - n_age_lims3
     age_lims2 = np.linspace(8.0, 9.0, n_age_lims2, endpoint=False).tolist()  # 100 Myr, ... 1 Gyr
@@ -72,7 +72,7 @@ def convert_zred_to_agebins_finer(zred=None, nbins_sfh=12, **extras):
 
     # Create set of age bins up from t_zmax to t_obs/t0
     n_comp = np.squeeze(nbins_sfh)
-    age_lims1 = [0.0, 6.6990, 7.0, 7.3010, 7.4771, 7.6990]  # 0, 5, 10, 20, 30, 50 Myr
+    age_lims1 = [0.0, 6.6990, 7.0, 7.3010, 7.4771, 7.6990]  # 0(1), 5, 10, 20, 30, 50 Myr
     n_age_lims3 = 4
     n_age_lims2 = (n_comp + 1) - len(age_lims1) - n_age_lims3
     age_lims2 = np.linspace(8.0, 9.0, n_age_lims2, endpoint=False).tolist()  # 100 Myr, ... 1 Gyr
@@ -81,7 +81,7 @@ def convert_zred_to_agebins_finer(zred=None, nbins_sfh=12, **extras):
     # -- convert to bins
     age_bins = np.array([age_lims[:-1], age_lims[1:]])
 
-    # Check agebins match
+    # Check age bins match number of sfh bins
     assert np.shape(age_bins)[0] == nbins_sfh
     
     return age_bins.T
@@ -90,7 +90,9 @@ def convert_logmass_to_masses(logmass=None, logsfr_ratios=None, zred=None, **ext
         """ Computes masses formed in each bin from SFR ratios"""
 
         # Calculate age bins and SFR ratios
-        agebins = convert_zred_to_agebins(zred=zred, **extras)
+        # -- select age bins
+        # agebins = convert_zred_to_agebins(zred=zred, **extras)
+        agebins = convert_zred_to_agebins_finer(zred=zred, **extras)
         logsfr_ratios = np.clip(logsfr_ratios, -10, 10)  # numerical issues...
         sfr_ratios = 10**logsfr_ratios
 
@@ -109,6 +111,21 @@ def convert_to_dust1(dust1_fraction=None, dust1=None, dust2=None, **extras):
     dust1 = dust1_fraction * dust2
     
     return dust1
+
+def convert_kms_offset_to_redshift(zred, vel_kms):
+    """Convert offset of velocity in km/s to difference in redshift (plus and minus)"""
+
+    # Calculate approaching/receding factors
+    c_kms = 299792.458
+    beta = vel_kms / c_kms
+    rec_factor = np.sqrt((1 + beta) / (1 - beta))
+    app_factor = np.sqrt((1 - beta) / (1 + beta))
+
+    # Apply to redshift
+    z_minus = (1 + zred) * app_factor - 1
+    z_plus = (1 + zred) * rec_factor - 1
+
+    return z_minus, z_plus
 
 # -----------------
 # Build noise model
@@ -191,10 +208,10 @@ def build_obs(obs_kwargs, **extras):
 
     # Load spectral data
     phot_filters, phot_flux, phot_err = load_photometry_data(**obs_kwargs["phot_kwargs"])
-    prism_wave, prism_flux, prism_err = load_prism_data(**obs_kwargs["prism_kwargs"])
-    g140m_wave, g140m_flux, g140m_err = load_grating_data(**obs_kwargs["g140m_kwargs"])
-    g235m_wave, g235m_flux, g235m_err = load_grating_data(**obs_kwargs["g235m_kwargs"])
-    g395m_wave, g395m_flux, g395m_err = load_grating_data(**obs_kwargs["g395m_kwargs"])
+    prism_wave, prism_flux, prism_err = load_spectrum_data(**obs_kwargs["prism_kwargs"])
+    g140m_wave, g140m_flux, g140m_err = load_spectrum_data(**obs_kwargs["g140m_kwargs"])
+    g235m_wave, g235m_flux, g235m_err = load_spectrum_data(**obs_kwargs["g235m_kwargs"])
+    g395m_wave, g395m_flux, g395m_err = load_spectrum_data(**obs_kwargs["g395m_kwargs"])
 
     # Load resolution data
     prism_sigma = load_dispersion_data(**obs_kwargs["prism_kwargs"])
@@ -216,10 +233,10 @@ def build_obs(obs_kwargs, **extras):
 
     # Crop wavelength ranges with spectral resolution high than data
     # -- prism
-    prism_wave, prism_flux, prism_err, prism_mask, prism_sigma = crop_bad_spectral_resolution(prism_wave, prism_flux, prism_err,prism_mask, prism_sigma, zred=3.2, wave_rest_lo=2000, wave_rest_hi=7000)
+    # prism_wave, prism_flux, prism_err, prism_mask, prism_sigma = crop_bad_spectral_resolution(prism_wave, prism_flux, prism_err,prism_mask, prism_sigma, zred=3.2, wave_rest_lo=2000, wave_rest_hi=7000)
     # -- medium-grating spectra
-    g140m_wave, g140m_flux, g140m_err, g140m_mask, g140m_sigma = crop_bad_spectral_resolution(g140m_wave, g140m_flux, g140m_err, g140m_mask, g140m_sigma, zred=3.2, wave_rest_lo=3000, wave_rest_hi=7000)
-    g235m_wave, g235m_flux, g235m_err, g235m_mask, g235m_sigma = crop_bad_spectral_resolution(g235m_wave, g235m_flux, g235m_err, g235m_mask, g235m_sigma, zred=3.2, wave_rest_lo=2000, wave_rest_hi=9000)
+    # g140m_wave, g140m_flux, g140m_err, g140m_mask, g140m_sigma = crop_bad_spectral_resolution(g140m_wave, g140m_flux, g140m_err, g140m_mask, g140m_sigma, zred=3.2, wave_rest_lo=3000, wave_rest_hi=7000)
+    # g235m_wave, g235m_flux, g235m_err, g235m_mask, g235m_sigma = crop_bad_spectral_resolution(g235m_wave, g235m_flux, g235m_err, g235m_mask, g235m_sigma, zred=3.2, wave_rest_lo=2000, wave_rest_hi=9000)
 
     # Create Photometry and Spectrum classes
     # -- nircam photometry
@@ -319,36 +336,37 @@ def build_model(model_kwargs, obs_kwargs=None, **extras):
                                            prior=priors.TopHat(mini=30, maxi=550))
         
     # Set zred
+    zred = model_kwargs["zred"]
+    z_plus, z_minus = convert_kms_offset_to_redshift(zred=zred, vel_kms=500)  # set bounds +/- 500 km/s from redshift estimate
     model_params["zred"]["isfree"] = True
-    model_params["zred"]["init"] = model_kwargs["zred"]
-    # model_params["zred"]["prior"] = priors.TopHat(mini=3.0, maxi=3.4)
-    model_params["zred"]["prior"] = priors.TopHat(mini=3.15, maxi=3.25)
+    model_params["zred"]["init"] = zred
+    model_params["zred"]["prior"] = priors.TopHat(mini=z_plus, maxi=z_minus)
 
     # Set IMF
     model_params["imf_type"]["init"] = 2  # Kroupa IMF
 
     # Set SFH prior
     # -- fix number of SFH bins
-    nbins_sfh = 9
+    nbins_sfh = 12
     model_params["nbins_sfh"] = dict(N=1, isfree=False, init=nbins_sfh)
     model_params["agebins"]["N"] = nbins_sfh
     model_params["mass"]["N"] = nbins_sfh
     model_params["logsfr_ratios"]["N"] = nbins_sfh - 1
     # -- create rising SFH ratios
-    z0 = model_params["zred"]["init"]
+    z0 = zred
     agebins = convert_zred_to_agebins(zred=z0, nbins_sfh=nbins_sfh)
     cosmo = cosmology.FlatLambdaCDM(H0=67.4, Om0=0.315, Tcmb0=2.726)
-    t_lookback_z0 = cosmo.lookback_time(z0).value * 1e9  # lookback time to z0    
+    t_lookback_z0 = cosmo.lookback_time(z0).value * 1e9  # lookback time to z0
     t_lookback_bins = t_lookback_z0 + np.mean(10**agebins, axis=1)  # lookback time for agebins
     zbins = cosmology.z_at_value(cosmo.lookback_time, t_lookback_bins*u.yr)  # redshift for agebins
     # -- calculate SFR ratios using rising prior
     alpha = 0.8
     mu = 5/2
     sfr_z = np.exp(-alpha*(zbins - z0)) * (1 + zbins)**(mu)  # base sfr in each bin
-    baseline_sfr_ratios = np.log10(sfr_z[0:-1]/sfr_z[1::])  # base logsfr ratio
+    base_logsfr_ratios = np.log10(sfr_z[0:-1]/sfr_z[1::])  # starting logsfr ratios
     # -- set logSFR bin ratios
     # model_params["logsfr_ratios"]["init"] = np.full(nbins_sfh - 1, baseline_sfr_ratios)  # rising SFH bin ratios
-    model_params["logsfr_ratios"]["init"] = baseline_sfr_ratios  # rising SFH bin ratios
+    model_params["logsfr_ratios"]["init"] = base_logsfr_ratios  # rising SFH
     model_params["logsfr_ratios"]["prior"] = priors.StudentT(mean=np.full(nbins_sfh-1, 0.0),  
                                                              scale=np.full(nbins_sfh-1, 0.3),
                                                              df=np.full(nbins_sfh-1, 2))  # use Student's-t distribution parameters from Leja et al. (2019)
@@ -376,27 +394,12 @@ def build_model(model_kwargs, obs_kwargs=None, **extras):
     model_params["dust_index"] = dict(N=1, isfree=True, init=0.0, 
                                       prior=priors.TopHat(mini=-1.0, maxi=0.2))
     # -- set attenuation of old stellar light (not birth cloud component)
-    model_params["dust2"]["prior"] = priors.ClippedNormal(mini=0.0, maxi=2.0, mean=0.3, sigma=1)
+    model_params["dust2"]["prior"] = priors.ClippedNormal(mini=0.0, maxi=2.0, mean=1.0, sigma=0.3)
     model_params["dust2"]["isfree"] = True
     # -- set attenuation due to birth clouds (fitted as a fraction of diffuse component)
     model_params["dust1"] = dict(N=1, isfree=False, init=0, prior=None, depends_on=convert_to_dust1)
     model_params["dust1_fraction"] = dict(N=1, isfree=True, init=1.0, 
                                           prior=priors.ClippedNormal(mini=0.0, maxi=2.0, mean=1.0, sigma=0.3))
-
-    # Set spectral calibration polynomial coefficient priors
-    # model_params.update(TemplateLibrary["optimize_speccal"])
-    # model_params["spec_norm"] = {"N": 1, "isfree": True, "init": 1.0, 
-    #                              "units": "f_true/f_obs", "prior": priors.Normal(mean=1.0, sigma=0.1)}
-    # model_params["polyorder"]["init"] = 7  # order of polynomial that"s fit to spectrum
-
-    # Set noise priors
-    # -- pixel outlier models
-    # model_params["nsigma_outlier_spec"] = dict(N=1, isfree=False, init=50.)
-    # model_params["f_outlier_spec"] = dict(N=1, isfree=True, init=1e-3, 
-    #                                       prior=priors.TopHat(mini=1e-5, maxi=0.01))
-    # # -- add multiplicative noise inflation term. Inflates noise in all spectroscopic pixels as necessary to get a statistically acceptable fit.
-    # model_params["spec_jitter"] = dict(N=1, isfree=True, init=1.0, 
-    #                                    prior=priors.TopHat(mini=0.5, maxi=5.0))
 
     # Add per-observation noise/outlier parameters
     for key, obs in obs_kwargs.items():
@@ -418,7 +421,7 @@ def build_model(model_kwargs, obs_kwargs=None, **extras):
     if smooth_spectra:
         model_params.update(TemplateLibrary["spectral_smoothing"])
         model_params["sigma_smooth"] = dict(N=1, isfree=True, init=300.0, units='km/s',
-                                            prior= priors.TopHat(mini=10, maxi=1000))  # follow methodology of De Graff+25
+                                            prior= priors.TopHat(mini=10, maxi=1000))  # follow De Graff+25 and set wide prior
         model_params['smoothtype']['init'] = 'vel'
         model_params['fftsmooth'] = {'N':1, 'isfree': False, 'init': True}
 
@@ -478,9 +481,10 @@ def main():
 
     obs_kwargs = {
 
+        # NOTE: No photometry yet
         "phot_kwargs" : {
-            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/photometry",
-            "data_name" : "007329_nircam_photometry.fits",
+            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/spurs/photometry",
+            "data_name" : "000007_nircam_photometry.fits",
             "data_ext" : "DATA",
             "in_flux_units" : "magnitude",
             "out_flux_units" : "maggie",
@@ -491,11 +495,12 @@ def main():
             "fit_obs" : True,
         },
 
+        # NOTE: No prism spectra yet
         "prism_kwargs" : {
-            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
+            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/spurs/spectra/prism",
             "data_name" : "007329_prism_clear_v3.1_extr5_1D.fits",
             "data_ext" : "DATA",
-            "mask_dir" :  "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/wave_masks",
+            "mask_dir" :  "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/spurs/wave_masks",
             "mask_name" : "007329_prism_clear_v3.1_extr5_1D_mask.fits",
             "mask_ext" : "MASK",
             "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
@@ -513,17 +518,17 @@ def main():
         },
 
         "g140m_kwargs" : {
-            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-            "data_name" : "007329_g140m_f100lp_1D.fits",
+            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/spurs/spectra/g140m_f100lp",
+            "data_name" : "000007_g140m_f100lp_v5.1_1D.fits",
             "data_ext" : "DATA",
-            "mask_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/wave_masks",
-            "mask_name" : "007329_g140m_f100lp_1D_mask.fits",
-            "mask_ext" : "MASK",
+            "mask_dir" : None,
+            "mask_name" : None,
+            "mask_ext" : None,
             "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
             "disp_name" : "jwst_nirspec_g140m_disp.fits",
-            "in_wave_units" : "um",
+            "in_wave_units" : "m",
             "out_wave_units" : "A",
-            "in_flux_units" : "ujy",
+            "in_flux_units" : "si",
             "out_flux_units" : "maggie",
             "rescale_factor" : None,
             "snr_limit" : 20.0,
@@ -534,20 +539,20 @@ def main():
         },
 
         "g235m_kwargs" : {
-            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-            "data_name" : "007329_g235m_f170lp_1D.fits",
+            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/spurs/spectra/g235m_f170lp",
+            "data_name" : "000007_g235m_f170lp_v5.1_1D.fits",
             "data_ext" : "DATA",
-            "mask_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/wave_masks",
-            "mask_name" : "007329_g235m_f170lp_1D_mask.fits",
-            "mask_ext" : "MASK",
+            "mask_dir" : None,
+            "mask_name" : None,
+            "mask_ext" : None,
             "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
             "disp_name" : "jwst_nirspec_g235m_disp.fits",
-            "in_wave_units" : "um",
+            "in_wave_units" : "m",
             "out_wave_units" : "A",
-            "in_flux_units" : "ujy",
+            "in_flux_units" : "si",
             "out_flux_units" : "maggie",
             "rescale_factor" : None,
-            "snr_limit" : 20,
+            "snr_limit" : 20.0,
             "prefix" : "g235m",
             "add_jitter" : True,
             "include_outliers" : True,
@@ -555,30 +560,30 @@ def main():
         },
 
         "g395m_kwargs" : {
-            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/zf-uds-7329/spectra",
-            "data_name" : "007329_g395m_f290lp_1D.fits",
+            "data_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/spurs/spectra/g395m_f290lp",
+            "data_name" : "000007_g395m_f290lp_v5.1_1D.fits",
             "data_ext" : "DATA",
             "mask_dir" : None,
             "mask_name" : None,
             "mask_ext" : None,
             "disp_dir" : "/Users/Jonah/PhD/Research/quiescent_galaxies/data_processed/dispersion_curves",
-            "disp_name" : "jwst_nirspec_g140m_disp.fits",
-            "in_wave_units" : "um",
+            "disp_name" : "jwst_nirspec_g395m_disp.fits",
+            "in_wave_units" : "si",
             "out_wave_units" : "A",
-            "in_flux_units" : "ujy",
+            "in_flux_units" : "si",
             "out_flux_units" : "maggie",
             "rescale_factor" : None,
             "snr_limit" : 20.0,
             "prefix" : "g395m",
             "add_jitter" : True,
             "include_outliers" : True,
-            "fit_obs" : False,
+            "fit_obs" : True,
         },
     }
 
     model_kwargs = {
-        "zred" : 3.19,
-        "add_nebular" : False,
+        "zred" : 9.3133,
+        "add_nebular" : True,
         "smooth_spectra" : True,
         "add_nuisance" : False,
         }
@@ -650,7 +655,7 @@ def main():
 
     # Prepare output
     out_name = f"{file_base}_{fsps_str}_{samp_str}_{obs_str}_neb{neb_str}_smooth{smooth_str}_nuis{nuis_str}.h5"
-    out_dir = os.path.join("/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/zf-uds-7329/prospector_outputs", 
+    out_dir = os.path.join("/Users/Jonah/PhD/Research/quiescent_galaxies/outputs/spurs/prospector_outputs", 
                            f"{file_base}_{fsps_str}")
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, out_name)
