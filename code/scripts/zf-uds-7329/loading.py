@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional, Tuple
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -129,7 +130,7 @@ def load_photometry_data(data_dir : str, data_name : str, data_ext : str, in_flu
     return sedpy_filters, flux_out, err_out
 
 def load_spectrum_data(data_dir : str, data_name : str, data_ext : str, in_wave_units : str, out_wave_units : str, in_flux_units : str, out_flux_units : str, rescale_factor : float, snr_limit : float, cgs_factor : float = None,
-                    return_none : bool = False, return_quantities : bool = False, return_units : bool = False, **extras):
+                    return_none : bool = False, return_quantities : bool = False, return_units : bool = False, **extras) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Load a 1D spectrum from a FITS file, convert units and apply preprocessing
 
@@ -139,7 +140,7 @@ def load_spectrum_data(data_dir : str, data_name : str, data_ext : str, in_wave_
     Parameters
     ----------
     data_dir : str
-        Directory containing the prism FITS file.
+        Directory containing the FITS file.
     data_name : str
         FITS file name (including suffix).
     data_ext : str
