@@ -17,7 +17,7 @@ from prospect.likelihood.kernels import Uncorrelated
 from prospect.fitting import fit_model, lnprobfn
 from prospect.io import write_results as writer
 
-from loading import load_photometry_data, load_prism_data, load_grating_data, load_mask_data, load_dispersion_data
+from loading import load_photometry_data, load_spectrum_data, load_mask_data, load_dispersion_data
 from preprocessing import crop_bad_spectral_resolution
 
 # ----------------
@@ -151,10 +151,10 @@ def build_obs(obs_kwargs, **extras):
 
     # Load spectral data
     phot_filters, phot_flux, phot_err = load_photometry_data(**obs_kwargs["phot_kwargs"])
-    prism_wave, prism_flux, prism_err = load_prism_data(**obs_kwargs["prism_kwargs"])
-    grat1_wave, grat1_flux, grat1_err = load_grating_data(**obs_kwargs["grat1_kwargs"])
-    grat2_wave, grat2_flux, grat2_err = load_grating_data(**obs_kwargs["grat2_kwargs"])
-    grat3_wave, grat3_flux, grat3_err = load_grating_data(**obs_kwargs["grat3_kwargs"])
+    prism_wave, prism_flux, prism_err = load_spectrum_data(**obs_kwargs["prism_kwargs"])
+    grat1_wave, grat1_flux, grat1_err = load_spectrum_data(**obs_kwargs["grat1_kwargs"])
+    grat2_wave, grat2_flux, grat2_err = load_spectrum_data(**obs_kwargs["grat2_kwargs"])
+    grat3_wave, grat3_flux, grat3_err = load_spectrum_data(**obs_kwargs["grat3_kwargs"])
 
     # Load resolution data
     prism_sigma = load_dispersion_data(**obs_kwargs["prism_kwargs"])
@@ -323,7 +323,7 @@ def build_model(model_kwargs, obs_kwargs=None, **extras):
     model_params["dust_index"] = dict(N=1, isfree=True, init=0.0, 
                                       prior=priors.TopHat(mini=-1.0, maxi=0.2))
     # -- set attenuation of old stellar light (not birth cloud component)
-    model_params["dust2"]["prior"] = priors.ClippedNormal(mini=0.0, maxi=2.0, mean=0.3, sigma=1)
+    model_params["dust2"]["prior"] = priors.ClippedNormal(mini=0.0, maxi=2.0, mean=1.0, sigma=0.3)
     model_params["dust2"]["isfree"] = True
     # -- set attenuation due to birth clouds (fitted as a fraction of diffuse component)
     model_params["dust1"] = dict(N=1, isfree=False, init=0, prior=None, depends_on=convert_to_dust1)
