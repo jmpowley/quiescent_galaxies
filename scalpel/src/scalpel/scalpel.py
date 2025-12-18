@@ -1,47 +1,80 @@
+"""Main Scalpel class for IFU bulge-disc decomposition."""
+
+from .config import ScalpelConfig, load_config_from_dict
 from .fitting import fit_bands_independent, fit_bands_simultaneous, fit_cube
 from .writing import save_simultaneous_fit_results_to_asdf
+
 
 class Scalpel:
     """Performs bulge-disc decomposition of IFU cubes"""
 
-    def __init__(self, config):
+    def __init__(self, config: dict):
+        """
+        Initialize Scalpel pipeline.
+        
+        Parameters
+        ----------
+        config : dict
+            Configuration dictionary
+        """
         print("Scalpel initialised")
+        
+        # Convert dict to dataclass
+        if isinstance(config, dict):
+            self.config: ScalpelConfig = load_config_from_dict(config)
+        else:
+            self.config = config
 
-        self.config = config
-
-    def fit_bands(self, cutout_kwargs, cube_kwargs, prior_dict, fit_kwargs):
+    def fit_bands(self):
         """Fit photometric bands to obtain structural parameters"""
         
-        # Fit photometric bands depending on type
-        fit_type = fit_kwargs["fit_type"]
-        # -- independently
+        fit_type = self.config.fit_config.fit_type
+        
         if fit_type == "independent":
-            fit_bands_independent(cutout_kwargs=cutout_kwargs, prior_dict=prior_dict, **fit_kwargs)
-        # -- simultaneously
+            return fit_bands_independent(
+                band_config=self.config.band_config,
+                prior_config=self.config.prior_config,
+                fit_config=self.config.fit_config,
+                io_config=self.config.io_config,
+            )
         elif fit_type == "simultaneous":
-            results_dict = fit_bands_simultaneous(cutout_kwargs=cutout_kwargs, cube_kwargs=cube_kwargs, in_prior_dict=prior_dict, **fit_kwargs)
+            return fit_bands_simultaneous(
+                band_config=self.config.band_config,
+                cube_config=self.config.cube_config,
+                prior_config=self.config.prior_config,
+                fit_config=self.config.fit_config,
+                io_config=self.config.io_config,
+            )
         else:
-            raise ValueError("Options for fitting are 'independent' or 'simultaneous'")
+            raise ValueError(f"fit_type must be 'independent' or 'simultaneous', got {fit_type}")
 
-        return results_dict
-
-    def fit_cube(self, cube_kwargs, results_dict, fit_kwargs):
+    def fit_cube(self, results_dict):
         """Fit cube slices using structural parameters from fit"""
-
-        fit_cube(cube_kwargs=cube_kwargs, results_dict=results_dict, **fit_kwargs)
+        
+        if self.config.cube_config is None:
+            print("No cube configuration provided. Skipping cube fitting.")
+            return
+        
+        fit_cube(
+            cube_config=self.config.cube_config,
+            results_dict=results_dict,
+            fit_config=self.config.fit_config,
+            prior_config=self.config.prior_config,
+        )
 
     def dissect(self):
-        """Wrapper for scalpel. Prepares data for fitting and then runs dissection procedure"""
-
-        # Load config info
-        cutout_kwargs = self.config["cutout_kwargs"]
-        cube_kwargs = self.config["cube_kwargs"]
-        prior_dict = self.config["prior_dict"]
-        fit_kwargs = self.config["fit_kwargs"]
-
+        """Wrapper for scalpel. Prepares data for fitting and then runs pipeline"""
+        
         # Fit photometric bands to obtain structural parameters
-        results_dict = self.fit_bands(cutout_kwargs=cutout_kwargs, cube_kwargs=cube_kwargs, prior_dict=prior_dict, fit_kwargs=fit_kwargs)
-        save_simultaneous_fit_results_to_asdf(results_dict, prior_dict, cutout_kwargs, cube_kwargs, fit_kwargs)
-
-        # Extract structural components from results
-        self.fit_cube(cube_kwargs=cube_kwargs, results_dict=results_dict, fit_kwargs=fit_kwargs)
+        results_dict = self.fit_bands()
+        
+        # Save results for simultaneous fits
+        if self.config.fit_config.fit_type == "simultaneous":
+            save_simultaneous_fit_results_to_asdf(
+                results_dict=results_dict,
+                config=self.config,
+            )
+        
+        # Extract structural components from cube if provided
+        if self.config.cube_config is not None:
+            self.fit_cube(results_dict=results_dict)

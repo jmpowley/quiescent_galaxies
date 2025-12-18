@@ -64,7 +64,7 @@ def plot_data_grid(trees, filters):
         mask = np.asarray(input_data["mask"])
         psf_np = np.asarray(input_data["psf"]).astype(np.float32)
 
-def plot_residuals_grid(images, masks, models, residuals, filters, scale : float = 2.0, resid_vmin : float = -1, resid_vmax : float = 1):
+def plot_residuals_grid(images, masks, models, residuals, filters : str, scale : float = 2.0, resid_vmin : float = -1, resid_vmax : float = 1):
 
     # Create figure
     ncols = 3

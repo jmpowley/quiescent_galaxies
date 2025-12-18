@@ -25,4 +25,5 @@ dependencies:
       - pysersic
       - astro-sedpy
       - stpsf
+      - reproject
       - -e /Users/Jonah/PhD/Research/quiescent_galaxies/scalpel
